@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(mkdir -p /tmp/design_extract)",
+      "Bash(tar -xzf /Users/zesza/.claude/projects/-Users-zesza-Desktop-BH-Tea-Production-Log/b73190a1-29df-4161-b68c-d738b3107378/tool-results/webfetch-1779608288623-eczmca.bin -C /tmp/design_extract)",
+      "Read(//tmp/**)",
+      "Bash(find /tmp/design_extract -type f | head -50)",
+      "Bash(python3 -m http.server 8000)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/index.html)",
+      "Bash(open http://localhost:8000/)",
+      "Bash(npm install *)",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/zesza/.nvm/versions/**)",
+      "Bash(cat ~/.zshrc 2>/dev/null | grep -E \"nvm|node|npm|fnm|volta|asdf\" | head -10)",
+      "Bash(sed -n '50,60p' \"/Users/zesza/Desktop/BH Tea Production Log/src/pages/Branch.jsx\")",
+      "Bash(sed -n '208,215p' \"/Users/zesza/Desktop/BH Tea Production Log/src/pages/Branch.jsx\")",
+      "Bash(sed -n '375,385p' \"/Users/zesza/Desktop/BH Tea Production Log/src/pages/Branch.jsx\")",
+      "Bash(sed -n '430,438p' \"/Users/zesza/Desktop/BH Tea Production Log/src/pages/Branch.jsx\")",
+      "Bash(cd \"/Users/zesza/Desktop/BH Tea Production Log\" && which npm 2>/dev/null || find /usr/local /opt /Users/zesza -name \"npm\" -type f 2>/dev/null | head -3)",
+      "Bash(/usr/local/bin/npm run *)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(/usr/local/bin/npm install *)"
+    ]
+  }
+}
