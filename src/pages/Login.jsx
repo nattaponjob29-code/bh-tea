@@ -8,6 +8,7 @@ export function LoginScreen() {
   const [pass, setPass] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPass, setShowPass] = useState(false);
 
   const submit = async (e) => {
     e?.preventDefault();
@@ -52,7 +53,28 @@ export function LoginScreen() {
               <span>รหัสผ่าน</span>
               <div style={{ position: 'relative' }}>
                 <Icon name="lock" size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-3)' }} />
-                <input className="inp" type="password" value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••" style={{ paddingLeft: 38 }} />
+                <input className="inp" type={showPass ? 'text' : 'password'} value={pass} onChange={e => setPass(e.target.value)} placeholder="••••••" style={{ paddingLeft: 38, paddingRight: 38 }} />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  style={{
+                    position: 'absolute',
+                    right: 14,
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--ink-3)',
+                    padding: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                  aria-label={showPass ? 'Hide password' : 'Show password'}
+                >
+                  <Icon name={showPass ? 'eye' : 'eye-off'} size={16} />
+                </button>
               </div>
             </label>
 
