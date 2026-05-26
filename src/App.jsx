@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { supabase } from './lib/supabase.js';
 import { ROLE_DEFS } from './lib/constants.js';
 import { StoreProvider, useStore } from './context/StoreContext.jsx';
@@ -7,6 +7,30 @@ import { BranchView } from './pages/Branch.jsx';
 import { AreaView } from './pages/Area.jsx';
 import { QCView } from './pages/QC.jsx';
 import { AdminView } from './pages/Admin.jsx';
+
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(e) { return { error: e }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 16, padding: 32, fontFamily: 'system-ui' }}>
+          <div style={{ fontSize: 32 }}>⚠️</div>
+          <div style={{ fontSize: 18, fontWeight: 600, color: '#b04634' }}>เกิดข้อผิดพลาดในระบบ</div>
+          <pre style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, fontSize: 12, maxWidth: 600, overflow: 'auto', whiteSpace: 'pre-wrap', color: '#333' }}>
+            {String(this.state.error)}
+            {'\n\n'}
+            {this.state.error?.stack}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ padding: '10px 20px', borderRadius: 8, background: '#1a1410', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 14 }}>
+            รีเฟรชหน้า
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function AppInner() {
   const [session, setSession] = useState(undefined);
@@ -79,8 +103,10 @@ function AppInner() {
 
 export default function App() {
   return (
-    <StoreProvider>
-      <AppInner />
-    </StoreProvider>
+    <ErrorBoundary>
+      <StoreProvider>
+        <AppInner />
+      </StoreProvider>
+    </ErrorBoundary>
   );
 }
