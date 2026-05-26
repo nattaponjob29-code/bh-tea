@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
 import { Icon, SearchBox, Empty, Modal, useToast } from './ui.jsx';
 import { fmtDateTH, fmtNum, todayISO, csvCell } from '../lib/helpers.js';
 import { deleteRecord } from '../lib/db.js';
@@ -353,7 +353,7 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
                   const colCount = 4 + (showBranch ? 1 : 0) + (mode === 'production' ? 1 : 0) + 1 + (refresh ? 1 : 0);
 
                   return (
-                    <React.Fragment key={r.id}>
+                    <Fragment key={r.id}>
                       <tr style={{ background: expanded ? 'var(--bg)' : undefined }}>
                         <td style={{ padding: '4px' }}>
                           {hasDetail && (
@@ -416,7 +416,7 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
                           </td>
                         </tr>
                       )}
-                    </React.Fragment>
+                    </Fragment>
                   );
                 })}
               </tbody>
