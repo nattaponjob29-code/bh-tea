@@ -20,7 +20,7 @@ export function BranchView({ user, store, refresh, onLogout }) {
 
   return (
     <AppShell user={user} onLogout={onLogout} nav={nav} current={page} onNav={setPage}>
-      {page === 'home'          && <BranchHome user={user} branch={branch} records={myRecords} go={setPage} />}
+      {page === 'home'          && <BranchHome user={user} branch={branch} records={myRecords} go={setPage} store={store} />}
       {page === 'produce'       && <BranchProduce user={user} store={store} refresh={refresh} />}
       {page === 'defect'        && <BranchDefect user={user} store={store} refresh={refresh} />}
       {page === 'history'       && <BranchHistory records={myRecords} store={store} refresh={refresh} />}
@@ -29,7 +29,7 @@ export function BranchView({ user, store, refresh, onLogout }) {
   );
 }
 
-function BranchHome({ user, branch, records, go }) {
+function BranchHome({ user, branch, records, go, store }) {
   const today = todayISO();
   const todayProd = records.filter(r => r.type === 'production' && r.date === today);
   const todayDef  = records.filter(r => r.type === 'defect'     && r.date === today);
