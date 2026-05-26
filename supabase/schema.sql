@@ -54,7 +54,7 @@ create table if not exists bom_defect (
 
 -- Production & Defect Records
 create table if not exists records (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  text primary key,  -- e.g. LOT-20260527-1234 or DEF-20260527-1234
   type                text not null check (type in ('production', 'defect')),
   date                date not null,
   time                text,
@@ -94,10 +94,16 @@ create table if not exists profiles (
 create or replace function handle_new_user()
 returns trigger language plpgsql security definer as $$
 begin
-  -- Only insert if not already present (api/create-user.js inserts before this fires)
-  insert into profiles (id, username, role)
-  values (new.id, split_part(new.email, '@', 1), 'Branch')
-  on conflict (id) do nothing;
+  insert into profiles (id, username, role, label)
+  values (
+    new.id,
+    split_part(new.email, '@', 1),
+    case when new.email = 'admin@bh.local' then 'Admin' else 'Branch' end,
+    case when new.email = 'admin@bh.local' then 'ผู้ดูแลระบบ' else '' end
+  )
+  on conflict (id) do update set
+    role  = excluded.role,
+    label = excluded.label;
   return new;
 end;
 $$;
@@ -145,6 +151,20 @@ create policy "auth delete own records" on records for delete using (by_user = a
 
 -- Profiles: users can update their own profile
 create policy "auth update own profile" on profiles for update using (id = auth.uid());
+
+-- Profiles: admin can update any profile (needed for assigning branches/roles)
+create or replace function is_admin()
+returns boolean language sql security definer as $$
+  select exists (
+    select 1 from profiles where id = auth.uid() and role = 'Admin'
+  );
+$$;
+
+drop policy if exists "admin update any profile" on profiles;
+create policy "admin update any profile" on profiles
+  for update to authenticated
+  using (is_admin())
+  with check (is_admin());
 
 -- Admin writes (branches, menus, ingredients, bom) are done via service role
 -- from Vercel API routes — no client-side RLS write policies needed for those.
