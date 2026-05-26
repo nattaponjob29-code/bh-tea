@@ -381,8 +381,8 @@ export function AreaView({ user, store, refresh, onLogout }) {
     <AppShell user={user} onLogout={onLogout} nav={nav} current={page} onNav={setPage}>
       {page === 'dashboard'     && <AreaDashboard user={user} myBranches={myBranches} records={myRecords} store={store} />}
       {page === 'branches'      && <AreaBranches  myBranches={myBranches} records={myRecords} />}
-      {page === 'history'       && <SplitHistoryPage records={myRecords} store={store} title="ประวัติการผลิต" eyebrow="History" showBranch showBranchFilter refresh={refresh} />}
-      {page === 'defectHistory' && <DefectHistoryPage records={myRecords} store={store} title="ประวัติเสียหาย" eyebrow="Defect History" showBranch showBranchFilter refresh={refresh} />}
+      {page === 'history'       && <SplitHistoryPage records={myRecords} store={store} title="ประวัติการผลิต" eyebrow="History" showBranch showBranchFilter refresh={refresh} branches={myBranches} />}
+      {page === 'defectHistory' && <DefectHistoryPage records={myRecords} store={store} title="ประวัติเสียหาย" eyebrow="Defect History" showBranch showBranchFilter refresh={refresh} branches={myBranches} />}
     </AppShell>
   );
 }

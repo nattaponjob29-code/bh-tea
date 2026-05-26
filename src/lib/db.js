@@ -104,6 +104,12 @@ export async function deleteRecord(id) {
   if (error) throw new Error(error.message);
 }
 
+export async function deleteRecords(ids) {
+  if (!ids || ids.length === 0) return;
+  const { error } = await supabase.from('records').delete().in('id', ids);
+  if (error) throw new Error(error.message);
+}
+
 // ─── Branches ─────────────────────────────────────────────────────────────────
 
 export async function saveBranch(branch) {

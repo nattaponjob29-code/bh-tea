@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
 import { Icon, SearchBox, Empty, Modal, useToast } from './ui.jsx';
 import { fmtDateTH, fmtNum, todayISO, csvCell } from '../lib/helpers.js';
-import { deleteRecord } from '../lib/db.js';
+import { deleteRecord, deleteRecords } from '../lib/db.js';
 
 export function DateQuickPresets({ setFrom, setTo }) {
   const [open, setOpen] = useState(false);
@@ -178,7 +178,7 @@ export function exportRecordsCSV(records, store, mode) {
   return '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
 }
 
-export function HistoryView({ records, store, sectionTitle, sectionIcon = 'history', mode = 'all', showBranch = true, showBranchFilter = false, refresh, title, eyebrow }) {
+export function HistoryView({ records, store, sectionTitle, sectionIcon = 'history', mode = 'all', showBranch = true, showBranchFilter = false, refresh, title, eyebrow, branches }) {
   const toast = useToast();
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
@@ -186,8 +186,11 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
   const [to, setTo] = useState(() => todayISO());
   const [branchFilter, setBranchFilter] = useState('all');
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  const branchList = branches || store.branches;
 
   const scopedRecords = useMemo(() => {
     if (mode === 'production') return records.filter(r => r.type === 'production');
@@ -229,6 +232,20 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
       refresh && await refresh();
       toast(`ลบ ${rec.id} แล้ว`, 'ok');
       setDeleteTarget(null);
+    } catch (e) {
+      toast('ลบไม่สำเร็จ: ' + e.message, 'bad');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const onDeleteAll = async () => {
+    setDeleting(true);
+    try {
+      await deleteRecords(filtered.map(r => r.id));
+      refresh && await refresh();
+      toast(`ลบ ${filtered.length} รายการแล้ว`, 'ok');
+      setDeleteAllOpen(false);
     } catch (e) {
       toast('ลบไม่สำเร็จ: ' + e.message, 'bad');
     } finally {
@@ -279,9 +296,16 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
             </div>
           </div>
         </div>
-        <button className="btn ghost" onClick={onExport} disabled={filtered.length === 0}>
-          <Icon name="arrow-down" size={14} /> Export CSV
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {refresh && filtered.length > 0 && (
+            <button className="btn danger" onClick={() => setDeleteAllOpen(true)}>
+              <Icon name="trash" size={14} /> ลบทั้งหมด ({filtered.length})
+            </button>
+          )}
+          <button className="btn ghost" onClick={onExport} disabled={filtered.length === 0}>
+            <Icon name="arrow-down" size={14} /> Export CSV
+          </button>
+        </div>
       </div>
 
       {tabs && (
@@ -306,7 +330,7 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
         {showBranchFilter && (
           <select className="inp" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
             <option value="all">ทุกสาขา</option>
-            {store.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {branchList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         )}
         <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
@@ -441,11 +465,33 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
           ลบประวัตินี้ <span className="font-mono" style={{ color: 'var(--ink)', fontWeight: 500 }}>{deleteTarget?.id}</span> ออกจากระบบ? การกระทำนี้ไม่สามารถย้อนกลับได้
         </p>
       </Modal>
+
+      <Modal open={deleteAllOpen} onClose={() => setDeleteAllOpen(false)} title="ยืนยันลบทั้งหมด" width={500}
+        footer={<>
+          <button className="btn ghost" onClick={() => setDeleteAllOpen(false)}>ยกเลิก</button>
+          <button className="btn danger" onClick={onDeleteAll} disabled={deleting}>
+            <Icon name="trash" size={14} /> {deleting ? 'กำลังลบ...' : `ลบ ${filtered.length} รายการ`}
+          </button>
+        </>}>
+        <div style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--ink-2)', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ padding: '12px 16px', background: 'rgba(176,70,52,.08)', border: '1px solid rgba(176,70,52,.25)', borderRadius: 10, fontSize: 13, color: 'var(--bad)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <Icon name="alert" size={16} style={{ marginTop: 1, flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>คำเตือน: ไม่สามารถย้อนกลับได้</div>
+              <div>จะลบ <strong>{filtered.length} รายการ</strong> ที่กรองแสดงอยู่ออกจากระบบถาวร</div>
+            </div>
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>
+            ช่วงวันที่: <strong style={{ color: 'var(--ink-2)' }}>{from || '—'} ถึง {to || '—'}</strong>
+            {branchFilter !== 'all' && <> · สาขา: <strong style={{ color: 'var(--ink-2)' }}>{branchList.find(b => b.id === branchFilter)?.name}</strong></>}
+          </div>
+        </div>
+      </Modal>
     </>
   );
 }
 
-export function SplitHistoryPage({ records, store, title, eyebrow, showBranch, showBranchFilter, refresh }) {
+export function SplitHistoryPage({ records, store, title, eyebrow, showBranch, showBranchFilter, refresh, branches }) {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, gap: 20 }} className="fade-up">
@@ -457,17 +503,18 @@ export function SplitHistoryPage({ records, store, title, eyebrow, showBranch, s
       </div>
       <HistoryView mode="production" records={records} store={store}
         sectionTitle="ประวัติการผลิต" sectionIcon="factory"
-        showBranch={showBranch} showBranchFilter={showBranchFilter} refresh={refresh} />
+        showBranch={showBranch} showBranchFilter={showBranchFilter} refresh={refresh} branches={branches} />
     </>
   );
 }
 
-export function DefectByMaterial({ records, store, showBranchFilter }) {
+export function DefectByMaterial({ records, store, showBranchFilter, branches }) {
   const toast = useToast();
   const [q, setQ] = useState('');
   const [from, setFrom] = useState(() => todayISO());
   const [to, setTo] = useState(() => todayISO());
   const [branchFilter, setBranchFilter] = useState('all');
+  const branchList = branches || store.branches;
 
   const filteredRecs = useMemo(() => records.filter(r => {
     if (from && r.date < from) return false;
@@ -534,7 +581,7 @@ export function DefectByMaterial({ records, store, showBranchFilter }) {
         {showBranchFilter && (
           <select className="inp" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
             <option value="all">ทุกสาขา</option>
-            {store.branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            {branchList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </select>
         )}
         <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
@@ -578,7 +625,7 @@ export function DefectByMaterial({ records, store, showBranchFilter }) {
   );
 }
 
-export function DefectHistoryPage({ records, store, title, eyebrow, showBranch = true, showBranchFilter = false, refresh }) {
+export function DefectHistoryPage({ records, store, title, eyebrow, showBranch = true, showBranchFilter = false, refresh, branches }) {
   const [view, setView] = useState('menu');
   const defectRecords = useMemo(() => records.filter(r => r.type === 'defect'), [records]);
 
@@ -613,10 +660,10 @@ export function DefectHistoryPage({ records, store, title, eyebrow, showBranch =
       {view === 'menu' && (
         <HistoryView mode="defect" records={records} store={store}
           sectionTitle="ประวัติเสียหายปริมาณเบส (กรัม)" sectionIcon="alert"
-          showBranch={showBranch} showBranchFilter={showBranchFilter} refresh={refresh} />
+          showBranch={showBranch} showBranchFilter={showBranchFilter} refresh={refresh} branches={branches} />
       )}
       {view === 'material' && (
-        <DefectByMaterial records={defectRecords} store={store} showBranchFilter={showBranchFilter} />
+        <DefectByMaterial records={defectRecords} store={store} showBranchFilter={showBranchFilter} branches={branches} />
       )}
     </>
   );
