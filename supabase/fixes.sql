@@ -29,10 +29,12 @@ create policy "admin update any profile" on profiles
 -- FIX 3: Trigger สร้าง profile อัตโนมัติ
 -- admin@bh.local → role Admin, label ผู้ดูแลระบบ (ไม่กลายเป็น Branch อีกต่อไป)
 -- ============================================================
-create or replace function handle_new_user()
-returns trigger language plpgsql security definer as $$
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer
+set search_path = public
+as $$
 begin
-  insert into profiles (id, username, role, label)
+  insert into public.profiles (id, username, role, label)
   values (
     new.id,
     split_part(new.email, '@', 1),
@@ -43,10 +45,12 @@ begin
     role  = excluded.role,
     label = excluded.label;
   return new;
+exception when others then
+  return new;
 end;
 $$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
-  for each row execute procedure handle_new_user();
+  for each row execute procedure public.handle_new_user();

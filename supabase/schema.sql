@@ -91,10 +91,12 @@ create table if not exists profiles (
 -- (The real profile is created by api/create-user.js)
 -- This just ensures no orphan auth users cause crashes.
 -- ============================================================
-create or replace function handle_new_user()
-returns trigger language plpgsql security definer as $$
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer
+set search_path = public
+as $$
 begin
-  insert into profiles (id, username, role, label)
+  insert into public.profiles (id, username, role, label)
   values (
     new.id,
     split_part(new.email, '@', 1),
@@ -104,6 +106,8 @@ begin
   on conflict (id) do update set
     role  = excluded.role,
     label = excluded.label;
+  return new;
+exception when others then
   return new;
 end;
 $$;
