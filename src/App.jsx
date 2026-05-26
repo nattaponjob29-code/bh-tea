@@ -13,10 +13,16 @@ function AppInner() {
   const { store, loading: storeLoading, refresh } = useStore();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) refresh();
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      if (event === 'SIGNED_IN') refresh();
+    });
     return () => subscription.unsubscribe();
-  }, []);
+  }, [refresh]);
 
   const onLogout = async () => {
     await supabase.auth.signOut();
