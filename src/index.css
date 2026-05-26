@@ -236,3 +236,63 @@ table.t tbody tr:hover { background: rgba(201,138,60,.06); }
   filter: blur(4px);
   animation: steam 3.4s ease-in-out infinite;
 }
+
+/* ─── Login Responsive ───────────────────────────────────────── */
+.login-layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+}
+.login-image-col {
+  position: relative;
+  overflow: hidden;
+  color: #fffdf7;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 60px 70px;
+  background-color: #1a1410;
+}
+.login-form-col {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 70px;
+  background: var(--bg);
+}
+
+@media (max-width: 768px) {
+  .login-layout {
+    grid-template-columns: 1fr;
+    position: relative;
+  }
+  .login-image-col {
+    position: absolute;
+    inset: 0;
+    padding: 0;
+    z-index: 0;
+    opacity: 0.25;
+  }
+  .login-image-col img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .login-form-col {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    padding: 40px 24px;
+    align-items: flex-start;
+    padding-top: 60px;
+    background: transparent;
+  }
+  .login-form-col > div {
+    width: 100%;
+    max-width: 100% !important;
+    background: rgba(246,241,231,0.92);
+    border-radius: 24px;
+    padding: 32px 24px;
+    box-shadow: 0 8px 40px rgba(61,36,24,.18);
+  }
+}

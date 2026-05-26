@@ -28,12 +28,12 @@ export function LoginScreen() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: '1.1fr 1fr' }}>
-      <div style={{ position: 'relative', overflow: 'hidden', color: '#fffdf7', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '60px 70px', backgroundColor: '#1a1410' }}>
+    <div className="login-layout">
+      <div className="login-image-col">
         <img src="/assets/login-bg.jpg" alt="" aria-hidden="true" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center' }} />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 70px', background: 'var(--bg)' }}>
+      <div className="login-form-col">
         <div style={{ width: '100%', maxWidth: 420 }} className="fade-up">
           <div style={{ fontSize: 12, color: 'var(--amber)', letterSpacing: '.14em', textTransform: 'uppercase', fontWeight: 600, marginBottom: 12 }}>
             Welcome back
