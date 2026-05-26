@@ -105,9 +105,13 @@ function AdminOverview({ store, refresh }) {
 function AdminBranches({ store, refresh }) {
   const toast = useToast();
   const [openAdd, setOpenAdd] = useState(false);
+  const [openBulk, setOpenBulk] = useState(false);
   const [form, setForm] = useState({ id: '', name: '', area: '' });
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+  const [bulkPreview, setBulkPreview] = useState([]);
+  const [bulkErrors, setBulkErrors] = useState([]);
 
   const submit = async () => {
     if (!form.id || !form.name || !form.area) return toast('กรอกข้อมูลให้ครบ', 'bad');
@@ -130,11 +134,44 @@ function AdminBranches({ store, refresh }) {
     } catch (e) { toast(e.message, 'bad'); }
   };
 
+  const parseBulk = (text) => {
+    const rows = []; const errs = [];
+    text.split('\n').forEach((line, i) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return;
+      const parts = trimmed.split(',').map(p => p.trim());
+      if (parts.length < 3) { errs.push(`บรรทัด ${i+1}: ต้องมี 3 คอลัมน์ (รหัส,ชื่อ,เขต)`); return; }
+      const [id, name, area] = parts;
+      if (!id || !name || !area) { errs.push(`บรรทัด ${i+1}: ข้อมูลไม่ครบ`); return; }
+      rows.push({ id: id.toUpperCase(), name, area });
+    });
+    setBulkPreview(rows); setBulkErrors(errs);
+  };
+
+  const submitBulk = async () => {
+    if (!bulkPreview.length) return toast('ไม่มีข้อมูลที่จะนำเข้า', 'bad');
+    setSaving(true);
+    let ok = 0; let fail = 0;
+    for (const b of bulkPreview) {
+      try { await saveBranch(b); ok++; }
+      catch { fail++; }
+    }
+    await refresh();
+    toast(`นำเข้าสำเร็จ ${ok} สาขา${fail ? ` (ล้มเหลว ${fail})` : ''}`, ok > 0 ? 'ok' : 'bad');
+    setOpenBulk(false); setBulkText(''); setBulkPreview([]); setBulkErrors([]);
+    setSaving(false);
+  };
+
   return (
     <>
       <PageHeader
         eyebrow="Master Data" title="จัดการสาขา" subtitle={`มี ${store.branches.length} สาขาในระบบ`}
-        right={<button className="btn amber" onClick={() => { setEditing(null); setForm({ id: '', name: '', area: '' }); setOpenAdd(true); }}><Icon name="plus" size={14} /> เพิ่มสาขาใหม่</button>}
+        right={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn ghost" onClick={() => { setBulkText(''); setBulkPreview([]); setBulkErrors([]); setOpenBulk(true); }}><Icon name="upload" size={14} /> นำเข้าหลายสาขา</button>
+            <button className="btn amber" onClick={() => { setEditing(null); setForm({ id: '', name: '', area: '' }); setOpenAdd(true); }}><Icon name="plus" size={14} /> เพิ่มสาขาใหม่</button>
+          </div>
+        }
       />
       <div className="card" style={{ overflow: 'hidden' }}>
         <table className="t">
@@ -158,12 +195,57 @@ function AdminBranches({ store, refresh }) {
           </tbody>
         </table>
       </div>
+
+      {/* Modal เพิ่มทีละสาขา */}
       <Modal open={openAdd} onClose={() => { setOpenAdd(false); setEditing(null); }} title={editing ? 'แก้ไขสาขา' : 'เพิ่มสาขาใหม่'}
         footer={<><button className="btn ghost" onClick={() => { setOpenAdd(false); setEditing(null); }}>ยกเลิก</button><button className="btn amber" onClick={submit} disabled={saving}><Icon name="check" size={14} /> บันทึก</button></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <label className="field"><span>รหัสสาขา</span><input className="inp" value={form.id} onChange={e => setForm({ ...form, id: e.target.value.toUpperCase() })} placeholder="BR08" disabled={!!editing} /></label>
           <label className="field"><span>ชื่อสาขา</span><input className="inp" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="สาขา..." /></label>
           <label className="field"><span>เขต / พื้นที่ (Area)</span><input className="inp" value={form.area} onChange={e => setForm({ ...form, area: e.target.value })} placeholder="BKK-Central / Upcountry / ..." /></label>
+        </div>
+      </Modal>
+
+      {/* Modal นำเข้าหลายสาขา */}
+      <Modal open={openBulk} onClose={() => setOpenBulk(false)} title="นำเข้าหลายสาขา"
+        footer={<><button className="btn ghost" onClick={() => setOpenBulk(false)}>ยกเลิก</button><button className="btn amber" onClick={submitBulk} disabled={saving || !bulkPreview.length}><Icon name="upload" size={14} /> นำเข้า {bulkPreview.length} สาขา</button></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', background: 'var(--paper)', padding: '10px 14px', borderRadius: 10, lineHeight: 1.7 }}>
+            <strong>รูปแบบ:</strong> แต่ละบรรทัด = <code style={{ background: 'var(--line)', padding: '1px 6px', borderRadius: 4 }}>รหัส, ชื่อสาขา, เขต</code><br />
+            <strong>ตัวอย่าง:</strong><br />
+            <code style={{ fontSize: 12 }}>BR02, สาขาสยามสแควร์วัน, BKK-Central</code><br />
+            <code style={{ fontSize: 12 }}>BR03, สาขาเอ็มควอเทียร์, BKK-Central</code><br />
+            <code style={{ fontSize: 12 }}>BR06, สาขาเชียงใหม่นิมาน, Upcountry</code>
+          </div>
+          <label className="field">
+            <span>วางข้อมูลสาขา (CSV)</span>
+            <textarea className="inp" rows={8} value={bulkText}
+              onChange={e => { setBulkText(e.target.value); parseBulk(e.target.value); }}
+              placeholder={'BR02, สาขาสยามสแควร์วัน, BKK-Central\nBR03, สาขาเอ็มควอเทียร์, BKK-Central\nBR04, สาขาเซ็นทรัลเวสต์เกต, BKK-West'}
+              style={{ fontFamily: 'monospace', fontSize: 13, resize: 'vertical' }} />
+          </label>
+          {bulkErrors.length > 0 && (
+            <div style={{ fontSize: 13, color: 'var(--bad)' }}>
+              {bulkErrors.map((e, i) => <div key={i}>⚠️ {e}</div>)}
+            </div>
+          )}
+          {bulkPreview.length > 0 && (
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--good)', marginBottom: 8 }}>✅ พบ {bulkPreview.length} สาขาที่จะนำเข้า:</div>
+              <table className="t" style={{ fontSize: 13 }}>
+                <thead><tr><th>รหัส</th><th>ชื่อสาขา</th><th>เขต</th></tr></thead>
+                <tbody>
+                  {bulkPreview.map((b, i) => (
+                    <tr key={i}>
+                      <td className="font-mono">{b.id}</td>
+                      <td>{b.name}</td>
+                      <td><span className="badge">{b.area}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </Modal>
     </>
