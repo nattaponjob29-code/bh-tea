@@ -208,7 +208,7 @@ function BranchProduce({ user, store, refresh }) {
       freezeTemp: needsFreeze ? Number(form.freezeTemp) : null,
       backdated: form.timeMode === 'back',
       producer: form.producer.trim(), tester: form.tester.trim(),
-      by: user.label || user.username,
+      by: user.id,
     };
     setSaving(true);
     try {
@@ -430,7 +430,7 @@ function BranchDefect({ user, store, refresh }) {
         branchId: user.branchId, menuId: menu.id,
         qty: grams, unit: 'กรัม',
         reason, note, materialBreakdown: matBreakdown,
-        by: user.label || user.username,
+        by: user.id,
       };
     });
     setSaving(true);
