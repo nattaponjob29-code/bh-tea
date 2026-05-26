@@ -447,13 +447,11 @@ function BranchDefect({ user, store, refresh }) {
     }
   };
 
-  const todayDefects = store.records.filter(r => r.branchId === user.branchId && r.type === 'defect' && r.date === todayISO());
-
   return (
     <>
       <PageHeader eyebrow="Defect Log" title="บันทึกของเสียหาย" subtitle="ลงบันทึกของเสียจากการผลิต — กรอกเป็นกรัม ระบบจะคำนวณวัตถุดิบที่เสียให้อัตโนมัติ" />
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 22 }} className="fade-up">
-        <div className="card" style={{ padding: '24px 26px' }}>
+      <div className="fade-up">
+        <div className="card" style={{ padding: '24px 26px', maxWidth: 720, margin: '0 auto' }}>
           <h3 className="font-display" style={{ margin: '0 0 18px', fontSize: 18, fontWeight: 600 }}>กรอกข้อมูลของเสีย</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -488,18 +486,6 @@ function BranchDefect({ user, store, refresh }) {
           <button className="btn danger" style={{ justifyContent: 'center', padding: '14px', width: '100%' }} onClick={submit} disabled={saving}>
             <Icon name="alert" size={14} /> {saving ? 'กำลังบันทึก...' : `บันทึกของเสีย ${validRows.length > 0 ? `(${validRows.length} รายการ)` : ''}`}
           </button>
-        </div>
-
-        <div className="card" style={{ padding: '24px 26px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <h3 className="font-display" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>วันนี้</h3>
-            <span className="badge warn"><span className="dot" />{todayDefects.length} รายการ</span>
-          </div>
-          {todayDefects.length === 0 ? <Empty icon="check" title="ยังไม่มีของเสียวันนี้" subtitle="ผลิตได้สะอาดเรียบร้อย 🍵" /> : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {todayDefects.map(r => <RecordRow key={r.id} r={r} store={store} />)}
-            </div>
-          )}
         </div>
       </div>
     </>
