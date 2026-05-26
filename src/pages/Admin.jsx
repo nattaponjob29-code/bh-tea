@@ -106,12 +106,25 @@ function AdminBranches({ store, refresh }) {
   const toast = useToast();
   const [openAdd, setOpenAdd] = useState(false);
   const [openBulk, setOpenBulk] = useState(false);
+  const [openDeleteSel, setOpenDeleteSel] = useState(false);
   const [form, setForm] = useState({ id: '', name: '', area: '' });
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [bulkText, setBulkText] = useState('');
-  const [bulkPreview, setBulkPreview] = useState([]);
-  const [bulkErrors, setBulkErrors] = useState([]);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+
+  const allSelected = store.branches.length > 0 && selectedIds.size === store.branches.length;
+  const someSelected = selectedIds.size > 0 && !allSelected;
+
+  const toggleAll = () => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds(new Set(store.branches.map(b => b.id)));
+  };
+  const toggleOne = (id) => setSelectedIds(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const submit = async () => {
     if (!form.id || !form.name || !form.area) return toast('กรอกข้อมูลให้ครบ', 'bad');
@@ -129,58 +142,98 @@ function AdminBranches({ store, refresh }) {
   const onEdit = (b) => { setEditing(b.id); setForm(b); setOpenAdd(true); };
   const onDelete = async (id) => {
     if (!window.confirm('ลบสาขานี้?')) return;
-    try {
-      await deleteBranch(id); await refresh(); toast('ลบเรียบร้อย', 'ok');
-    } catch (e) { toast(e.message, 'bad'); }
+    try { await deleteBranch(id); await refresh(); toast('ลบเรียบร้อย', 'ok'); }
+    catch (e) { toast(e.message, 'bad'); }
   };
 
-  const parseBulk = (text) => {
-    const rows = []; const errs = [];
+  const onDeleteSelected = async () => {
+    setSaving(true);
+    let ok = 0, fail = 0;
+    for (const id of selectedIds) {
+      try { await deleteBranch(id); ok++; }
+      catch { fail++; }
+    }
+    await refresh();
+    toast(`ลบ ${ok} สาขา${fail ? ` (ล้มเหลว ${fail})` : ''}`, ok > 0 ? 'ok' : 'bad');
+    setSelectedIds(new Set());
+    setOpenDeleteSel(false);
+    setSaving(false);
+  };
+
+  const parseBulkRows = (text) => {
+    const rows = [], errs = [];
     text.split('\n').forEach((line, i) => {
       const trimmed = line.trim();
       if (!trimmed || trimmed.startsWith('#')) return;
       const parts = trimmed.split(',').map(p => p.trim());
-      if (parts.length < 3) { errs.push(`บรรทัด ${i+1}: ต้องมี 3 คอลัมน์ (รหัส,ชื่อ,เขต)`); return; }
+      if (parts.length < 3) { errs.push(`บรรทัด ${i + 1}: ต้องมี 3 คอลัมน์ (รหัส,ชื่อ,เขต)`); return; }
       const [id, name, area] = parts;
-      if (!id || !name || !area) { errs.push(`บรรทัด ${i+1}: ข้อมูลไม่ครบ`); return; }
+      if (!id || !name || !area) { errs.push(`บรรทัด ${i + 1}: ข้อมูลไม่ครบ`); return; }
       rows.push({ id: id.toUpperCase(), name, area });
     });
-    setBulkPreview(rows); setBulkErrors(errs);
+    return { rows, errs };
   };
 
   const submitBulk = async () => {
-    if (!bulkPreview.length) return toast('ไม่มีข้อมูลที่จะนำเข้า', 'bad');
+    const { rows, errs } = parseBulkRows(bulkText);
+    if (errs.length > 0) return toast(errs[0] + (errs.length > 1 ? ` (+${errs.length - 1} อื่น)` : ''), 'bad');
+    if (!rows.length) return toast('ไม่มีข้อมูลที่จะนำเข้า', 'bad');
     setSaving(true);
-    let ok = 0; let fail = 0;
-    for (const b of bulkPreview) {
+    let ok = 0, fail = 0;
+    for (const b of rows) {
       try { await saveBranch(b); ok++; }
       catch { fail++; }
     }
     await refresh();
     toast(`นำเข้าสำเร็จ ${ok} สาขา${fail ? ` (ล้มเหลว ${fail})` : ''}`, ok > 0 ? 'ok' : 'bad');
-    setOpenBulk(false); setBulkText(''); setBulkPreview([]); setBulkErrors([]);
+    setOpenBulk(false); setBulkText('');
     setSaving(false);
   };
 
   return (
     <>
       <PageHeader
-        eyebrow="Master Data" title="จัดการสาขา" subtitle={`มี ${store.branches.length} สาขาในระบบ`}
+        eyebrow="Master Data" title="จัดการสาขา"
+        subtitle={selectedIds.size > 0 ? `เลือก ${selectedIds.size} สาขา` : `มี ${store.branches.length} สาขาในระบบ`}
         right={
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn ghost" onClick={() => { setBulkText(''); setBulkPreview([]); setBulkErrors([]); setOpenBulk(true); }}><Icon name="upload" size={14} /> นำเข้าหลายสาขา</button>
-            <button className="btn amber" onClick={() => { setEditing(null); setForm({ id: '', name: '', area: '' }); setOpenAdd(true); }}><Icon name="plus" size={14} /> เพิ่มสาขาใหม่</button>
+            {selectedIds.size > 0 && (
+              <button className="btn danger" onClick={() => setOpenDeleteSel(true)}>
+                <Icon name="trash" size={14} /> ลบที่เลือก ({selectedIds.size})
+              </button>
+            )}
+            <button className="btn ghost" onClick={() => { setBulkText(''); setOpenBulk(true); }}>
+              <Icon name="upload" size={14} /> นำเข้าหลายสาขา
+            </button>
+            <button className="btn amber" onClick={() => { setEditing(null); setForm({ id: '', name: '', area: '' }); setOpenAdd(true); }}>
+              <Icon name="plus" size={14} /> เพิ่มสาขาใหม่
+            </button>
           </div>
         }
       />
       <div className="card" style={{ overflow: 'hidden' }}>
         <table className="t">
-          <thead><tr><th>รหัส</th><th>ชื่อสาขา</th><th>เขต / พื้นที่</th><th style={{ textAlign: 'right' }}>กิจกรรม</th><th style={{ width: 140 }}></th></tr></thead>
+          <thead>
+            <tr>
+              <th style={{ width: 40, textAlign: 'center' }}>
+                <input type="checkbox" checked={allSelected} ref={el => { if (el) el.indeterminate = someSelected; }}
+                  onChange={toggleAll} style={{ cursor: 'pointer', width: 15, height: 15 }} />
+              </th>
+              <th>รหัส</th><th>ชื่อสาขา</th><th>เขต / พื้นที่</th>
+              <th style={{ textAlign: 'right' }}>กิจกรรม</th>
+              <th style={{ width: 100 }}></th>
+            </tr>
+          </thead>
           <tbody>
             {store.branches.map(b => {
               const cnt = store.records.filter(r => r.branchId === b.id).length;
+              const checked = selectedIds.has(b.id);
               return (
-                <tr key={b.id}>
+                <tr key={b.id} style={{ background: checked ? 'color-mix(in oklch, var(--amber) 6%, transparent)' : undefined }}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleOne(b.id)}
+                      style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                  </td>
                   <td className="font-mono" style={{ fontSize: 13, color: 'var(--ink)' }}>{b.id}</td>
                   <td style={{ fontWeight: 500 }}>{b.name}</td>
                   <td><span className="badge">{b.area}</span></td>
@@ -208,44 +261,41 @@ function AdminBranches({ store, refresh }) {
 
       {/* Modal นำเข้าหลายสาขา */}
       <Modal open={openBulk} onClose={() => setOpenBulk(false)} title="นำเข้าหลายสาขา"
-        footer={<><button className="btn ghost" onClick={() => setOpenBulk(false)}>ยกเลิก</button><button className="btn amber" onClick={submitBulk} disabled={saving || !bulkPreview.length}><Icon name="upload" size={14} /> นำเข้า {bulkPreview.length} สาขา</button></>}>
+        footer={<><button className="btn ghost" onClick={() => setOpenBulk(false)}>ยกเลิก</button><button className="btn amber" onClick={submitBulk} disabled={saving || !bulkText.trim()}><Icon name="upload" size={14} /> {saving ? 'กำลังนำเข้า...' : 'นำเข้า'}</button></>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ fontSize: 13, color: 'var(--ink-3)', background: 'var(--paper)', padding: '10px 14px', borderRadius: 10, lineHeight: 1.7 }}>
-            <strong>รูปแบบ:</strong> แต่ละบรรทัด = <code style={{ background: 'var(--line)', padding: '1px 6px', borderRadius: 4 }}>รหัส, ชื่อสาขา, เขต</code><br />
-            <strong>ตัวอย่าง:</strong><br />
-            <code style={{ fontSize: 12 }}>BR02, สาขาสยามสแควร์วัน, BKK-Central</code><br />
-            <code style={{ fontSize: 12 }}>BR03, สาขาเอ็มควอเทียร์, BKK-Central</code><br />
-            <code style={{ fontSize: 12 }}>BR06, สาขาเชียงใหม่นิมาน, Upcountry</code>
+          <div style={{ fontSize: 13, color: 'var(--ink-3)', background: 'var(--paper)', padding: '10px 14px', borderRadius: 10, lineHeight: 1.8 }}>
+            แต่ละบรรทัด = <code style={{ background: 'var(--line)', padding: '1px 6px', borderRadius: 4 }}>รหัส, ชื่อสาขา, เขต</code><br />
+            <code style={{ fontSize: 12 }}>BR08, สาขาใหม่, BKK-Central</code>
           </div>
           <label className="field">
-            <span>วางข้อมูลสาขา (CSV)</span>
-            <textarea className="inp" rows={8} value={bulkText}
-              onChange={e => { setBulkText(e.target.value); parseBulk(e.target.value); }}
-              placeholder={'BR02, สาขาสยามสแควร์วัน, BKK-Central\nBR03, สาขาเอ็มควอเทียร์, BKK-Central\nBR04, สาขาเซ็นทรัลเวสต์เกต, BKK-West'}
+            <span>วางข้อมูลสาขา</span>
+            <textarea className="inp" rows={10} value={bulkText} onChange={e => setBulkText(e.target.value)}
+              placeholder={'BR08, สาขาฟิวเจอร์พาร์ค, BKK-North\nBR09, สาขาเซ็นทรัลพระราม 9, BKK-Central\nBR10, สาขาเมกาบางนา, BKK-East'}
               style={{ fontFamily: 'monospace', fontSize: 13, resize: 'vertical' }} />
           </label>
-          {bulkErrors.length > 0 && (
-            <div style={{ fontSize: 13, color: 'var(--bad)' }}>
-              {bulkErrors.map((e, i) => <div key={i}>⚠️ {e}</div>)}
-            </div>
-          )}
-          {bulkPreview.length > 0 && (
+        </div>
+      </Modal>
+
+      {/* Modal ยืนยันลบที่เลือก */}
+      <Modal open={openDeleteSel} onClose={() => setOpenDeleteSel(false)} title="ยืนยันลบสาขาที่เลือก" width={480}
+        footer={<><button className="btn ghost" onClick={() => setOpenDeleteSel(false)}>ยกเลิก</button><button className="btn danger" onClick={onDeleteSelected} disabled={saving}><Icon name="trash" size={14} /> {saving ? 'กำลังลบ...' : `ลบ ${selectedIds.size} สาขา`}</button></>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 14 }}>
+          <div style={{ padding: '12px 16px', background: 'rgba(176,70,52,.08)', border: '1px solid rgba(176,70,52,.25)', borderRadius: 10, color: 'var(--bad)', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <Icon name="alert" size={16} style={{ marginTop: 1, flexShrink: 0 }} />
             <div>
-              <div style={{ fontSize: 13, color: 'var(--good)', marginBottom: 8 }}>✅ พบ {bulkPreview.length} สาขาที่จะนำเข้า:</div>
-              <table className="t" style={{ fontSize: 13 }}>
-                <thead><tr><th>รหัส</th><th>ชื่อสาขา</th><th>เขต</th></tr></thead>
-                <tbody>
-                  {bulkPreview.map((b, i) => (
-                    <tr key={i}>
-                      <td className="font-mono">{b.id}</td>
-                      <td>{b.name}</td>
-                      <td><span className="badge">{b.area}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>ลบ {selectedIds.size} สาขาที่เลือก?</div>
+              <div style={{ fontSize: 13 }}>การกระทำนี้ไม่สามารถย้อนกลับได้ · ข้อมูลการผลิตที่ผูกกับสาขาเหล่านี้จะยังคงอยู่</div>
             </div>
-          )}
+          </div>
+          <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {store.branches.filter(b => selectedIds.has(b.id)).map(b => (
+              <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: 'var(--bg)', borderRadius: 8, fontSize: 13 }}>
+                <span className="font-mono" style={{ color: 'var(--ink-2)', minWidth: 48 }}>{b.id}</span>
+                <span style={{ flex: 1 }}>{b.name}</span>
+                <span className="badge">{b.area}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </Modal>
     </>
