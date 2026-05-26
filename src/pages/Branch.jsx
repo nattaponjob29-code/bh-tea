@@ -187,7 +187,6 @@ function BranchProduce({ user, store, refresh }) {
       if (form.freezeTemp === '' || form.freezeTemp === null) return toast('กรุณาวัดอุณหภูมิแช่แข็งของไข่มุก', 'bad');
       const t = Number(form.freezeTemp);
       if (!Number.isFinite(t)) return toast('อุณหภูมิไม่ถูกต้อง', 'bad');
-      if (t > -18) return toast(`อุณหภูมิต้อง ≤ -18°C (วัดได้ ${t}°C)`, 'bad');
     }
     let date = todayISO(), time = nowHM();
     if (form.timeMode === 'back') {
@@ -279,12 +278,12 @@ function BranchProduce({ user, store, refresh }) {
                 const isOK = hasVal && Number.isFinite(t) && t <= -18;
                 return (
                   <label className="field fade-up">
-                    <span>อุณหภูมิแช่แข็งไข่มุก (ต้อง ≤ -18°C)</span>
+                    <span>อุณหภูมิแช่แข็งไข่มุก <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(แนะนำ ≤ -18°C)</span></span>
                     <div style={{ position: 'relative' }}>
-                      <input type="number" step="0.1" className="inp" value={form.freezeTemp} onChange={e => setForm({ ...form, freezeTemp: e.target.value })} placeholder="-18.0" style={{ paddingRight: 80, fontFamily: 'Space Grotesk', borderColor: !hasVal ? 'var(--line-2)' : (isOK ? 'var(--ok)' : 'var(--bad)'), background: !hasVal ? 'var(--paper)' : (isOK ? 'rgba(78,124,58,.05)' : 'rgba(176,70,52,.05)') }} />
-                      <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>°C{hasVal && (isOK ? <Icon name="check" size={14} style={{ color: 'var(--ok)' }} /> : <Icon name="alert" size={14} style={{ color: 'var(--bad)' }} />)}</span>
+                      <input type="number" step="0.1" className="inp" value={form.freezeTemp} onChange={e => setForm({ ...form, freezeTemp: e.target.value })} placeholder="-18.0" style={{ paddingRight: 80, fontFamily: 'Space Grotesk', borderColor: !hasVal ? 'var(--line-2)' : (isOK ? 'var(--ok)' : 'var(--warn)'), background: !hasVal ? 'var(--paper)' : (isOK ? 'rgba(78,124,58,.05)' : 'rgba(201,138,60,.06)') }} />
+                      <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>°C{hasVal && (isOK ? <Icon name="check" size={14} style={{ color: 'var(--ok)' }} /> : <Icon name="alert" size={14} style={{ color: 'var(--warn)' }} />)}</span>
                     </div>
-                    {hasVal && !isOK && <div style={{ fontSize: 12, color: 'var(--bad)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="alert" size={12} />อุณหภูมิสูงเกินไป — ไข่มุกต้องแช่แข็ง ≤ -18°C</div>}
+                    {hasVal && !isOK && <div style={{ fontSize: 12, color: 'var(--warn)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="alert" size={12} />อุณหภูมิสูงกว่ามาตรฐาน — แนะนำให้แช่ที่ ≤ -18°C เพื่อคุณภาพไข่มุก</div>}
                   </label>
                 );
               })()}
