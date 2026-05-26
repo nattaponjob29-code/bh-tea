@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
 
 export function Icon({ name, size = 18, stroke = 1.6, ...rest }) {
   const p = { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: stroke, strokeLinecap: 'round', strokeLinejoin: 'round', ...rest };
@@ -170,14 +170,31 @@ export function Donut({ segments, size = 160, thickness = 22 }) {
 }
 
 export function AppShell({ user, onLogout, nav, current, onNav, children }) {
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  const handleNav = (key) => { onNav(key); setSidebarOpen(false); };
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', minHeight: '100vh', position: 'relative', zIndex: 1 }}>
-      <aside style={{
-        background: 'var(--ink)', color: '#f6f1e7', padding: '22px 18px',
-        display: 'flex', flexDirection: 'column',
-        borderRight: '1px solid #000',
-        position: 'sticky', top: 0, height: '100vh',
-      }}>
+    <div className="app-shell">
+      {/* Mobile overlay */}
+      {sidebarOpen && <div className="sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      {/* Mobile top bar */}
+      <div className="mobile-topbar">
+        <button className="hamburger" onClick={() => setSidebarOpen(true)} aria-label="เมนู">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <rect y="3" width="20" height="2" rx="1" fill="currentColor"/>
+            <rect y="9" width="20" height="2" rx="1" fill="currentColor"/>
+            <rect y="15" width="20" height="2" rx="1" fill="currentColor"/>
+          </svg>
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Logo size={28} dark={false} />
+          <span className="font-display" style={{ fontSize: 16, fontWeight: 700, letterSpacing: '-0.02em' }}>TeaLog</span>
+        </div>
+        <div style={{ width: 36 }} />
+      </div>
+
+      <aside className={`app-sidebar${sidebarOpen ? ' open' : ''}`}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28, paddingLeft: 6 }}>
           <Logo size={36} dark />
           <div>
@@ -189,17 +206,14 @@ export function AppShell({ user, onLogout, nav, current, onNav, children }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
           <div style={{ fontSize: 10, color: 'rgba(255,253,247,.4)', padding: '10px 12px 6px', letterSpacing: '.12em', textTransform: 'uppercase' }}>Workspace</div>
           {nav.map(n => (
-            <button key={n.key} onClick={() => onNav(n.key)} style={{
+            <button key={n.key} onClick={() => handleNav(n.key)} style={{
               display: 'flex', alignItems: 'center', gap: 12,
               padding: '11px 12px', borderRadius: 10,
               background: current === n.key ? 'rgba(246,241,231,.10)' : 'transparent',
               color: current === n.key ? '#fffdf7' : 'rgba(246,241,231,.7)',
               border: 'none', textAlign: 'left', cursor: 'pointer',
               fontSize: 14, fontFamily: 'inherit', transition: 'all 140ms', position: 'relative',
-            }}
-              onMouseEnter={e => { if (current !== n.key) e.currentTarget.style.background = 'rgba(246,241,231,.05)'; }}
-              onMouseLeave={e => { if (current !== n.key) e.currentTarget.style.background = 'transparent'; }}
-            >
+            }}>
               {current === n.key && <span style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 3, background: 'var(--amber)', borderRadius: 3 }} />}
               <Icon name={n.icon} size={18} />
               <span>{n.label}</span>
@@ -210,34 +224,21 @@ export function AppShell({ user, onLogout, nav, current, onNav, children }) {
 
         <div style={{ borderTop: '1px solid rgba(246,241,231,.12)', paddingTop: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px' }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--amber), var(--tea))',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'Space Grotesk', fontWeight: 700, color: '#fffdf7',
-            }}>{(user.label || user.user || '?')[0]}</div>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg, var(--amber), var(--tea))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'Space Grotesk', fontWeight: 700, color: '#fffdf7', flexShrink: 0 }}>
+              {(user.label || user.username || '?')[0]}
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: '#fffdf7' }}>{user.label || user.user}</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: '#fffdf7', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.label || user.username}</div>
               <div style={{ fontSize: 11, color: 'rgba(246,241,231,.5)' }}>{user.roleLabel}{user.branchName ? ` · ${user.branchName}` : ''}</div>
             </div>
           </div>
-          <button onClick={onLogout} style={{
-            marginTop: 8, width: '100%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            padding: '10px', borderRadius: 10,
-            background: 'rgba(246,241,231,.05)',
-            color: 'rgba(246,241,231,.8)', border: '1px solid rgba(246,241,231,.1)',
-            cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', transition: 'all 140ms',
-          }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(246,241,231,.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(246,241,231,.05)'; }}
-          >
+          <button onClick={onLogout} style={{ marginTop: 8, width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px', borderRadius: 10, background: 'rgba(246,241,231,.05)', color: 'rgba(246,241,231,.8)', border: '1px solid rgba(246,241,231,.1)', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit', transition: 'all 140ms' }}>
             <Icon name="logout" size={14} /> ออกจากระบบ
           </button>
         </div>
       </aside>
 
-      <main style={{ padding: '32px 40px', minWidth: 0 }}>
+      <main className="app-main">
         {children}
       </main>
     </div>
