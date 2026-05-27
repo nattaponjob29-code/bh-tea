@@ -141,15 +141,15 @@ export function Bars({ data, color = 'var(--amber)', height = 140, labels }) {
   );
 }
 
-export function Donut({ segments, size = 160, thickness = 22 }) {
+export function Donut({ segments, size = 160, thickness = 22, stack = false }) {
   const total = segments.reduce((s, x) => s + x.value, 0) || 1;
   const r = size / 2 - thickness / 2;
   const c = size / 2;
   let acc = 0;
   const circ = 2 * Math.PI * r;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+    <div style={{ display: 'flex', flexDirection: stack ? 'column' : 'row', alignItems: 'center', gap: stack ? 14 : 20 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
         <circle cx={c} cy={c} r={r} fill="none" stroke="var(--line)" strokeWidth={thickness} />
         {segments.map((s, i) => {
           const frac = s.value / total;
@@ -166,12 +166,12 @@ export function Donut({ segments, size = 160, thickness = 22 }) {
         <text x={c} y={c + 6} textAnchor="middle" style={{ transform: `rotate(90deg)`, transformOrigin: `${c}px ${c}px` }}
           fontFamily="Space Grotesk" fontWeight="600" fontSize="22" fill="var(--ink)">{total}</text>
       </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', flexDirection: stack ? 'row' : 'column', flexWrap: stack ? 'wrap' : 'nowrap', gap: stack ? '6px 16px' : 8, justifyContent: stack ? 'center' : undefined }}>
         {segments.map((s, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color }} />
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
             <span style={{ color: 'var(--ink-2)' }}>{s.label}</span>
-            <span className="num" style={{ color: 'var(--ink-3)', marginLeft: 'auto' }}>{s.value}</span>
+            <span className="num" style={{ color: 'var(--ink-3)', marginLeft: stack ? 0 : 'auto' }}>{s.value}</span>
           </div>
         ))}
       </div>

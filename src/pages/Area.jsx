@@ -153,20 +153,17 @@ export function DefectMaterialDashboard({ records, store }) {
               </div>
             ))}
           </div>
-          <div>
+          <div style={{ display: 'flex', justifyContent: isMobile ? 'center' : undefined }}>
             <Donut
               segments={top.slice(0, 5).map((b, i) => ({
                 label: b.name,
                 value: Math.round(b.qty * 100) / 100,
                 color: ['var(--bad)', 'var(--warn)', 'var(--info)', 'var(--amber)', 'var(--matcha)'][i],
               }))}
-              size={180} thickness={26}
+              size={isMobile ? 140 : 180}
+              thickness={isMobile ? 22 : 26}
+              stack={isMobile}
             />
-            <div style={{ marginTop: 16, padding: '12px 14px', background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--line)', fontSize: 12, color: 'var(--ink-3)' }}>
-              <Icon name="sparkle" size={12} style={{ verticalAlign: '-2px', marginRight: 6, color: 'var(--amber)' }} />
-              คำนวณจากสูตร: <span className="font-mono" style={{ color: 'var(--ink-2)' }}>กรัม × BOM(/g)</span>
-              <br />ตัวอย่าง: ลงเสีย 1000g + BOM 0.001 ถุง/g = 1 ถุง
-            </div>
           </div>
         </div>
       )}
