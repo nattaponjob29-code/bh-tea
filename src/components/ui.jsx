@@ -179,6 +179,78 @@ export function Donut({ segments, size = 160, thickness = 22, stack = false }) {
   );
 }
 
+/* Interactive Donut — arc-path based, hover shows segment detail in center */
+export function InteractiveDonut({ segments, size = 200, thickness = 32 }) {
+  const [hovered, setHovered] = useState(null);
+  const total = segments.reduce((s, x) => s + x.value, 0) || 1;
+  const cx = size / 2, cy = size / 2;
+  const outerR = size / 2 - 3;
+  const innerR = outerR - thickness;
+  const GAP = segments.length > 1 ? 2.5 : 0;
+
+  function xy(r, deg) {
+    const rad = deg * Math.PI / 180;
+    return [+(cx + r * Math.cos(rad)).toFixed(3), +(cy + r * Math.sin(rad)).toFixed(3)];
+  }
+
+  function buildArc(startDeg, endDeg) {
+    const s = startDeg + GAP / 2;
+    const e = endDeg - GAP / 2;
+    if (e - s <= 0.5) return '';
+    const lg = e - s > 180 ? 1 : 0;
+    const [x1, y1] = xy(outerR, s);
+    const [x2, y2] = xy(outerR, e);
+    const [x3, y3] = xy(innerR, e);
+    const [x4, y4] = xy(innerR, s);
+    return `M${x1} ${y1}A${outerR} ${outerR} 0 ${lg} 1 ${x2} ${y2}L${x3} ${y3}A${innerR} ${innerR} 0 ${lg} 0 ${x4} ${y4}Z`;
+  }
+
+  let acc = -90;
+  const arcs = segments.map((seg, i) => {
+    const sw = (seg.value / total) * 360;
+    const start = acc;
+    const end = acc + (sw >= 360 ? 359.9 : sw);
+    acc += sw;
+    return { ...seg, start, end, i };
+  });
+
+  const hov = hovered !== null ? segments[hovered] : null;
+
+  return (
+    <div style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 8, userSelect: 'none' }}>
+      <svg width={size} height={size} style={{ display: 'block' }}
+        onMouseLeave={() => setHovered(null)}>
+        {/* Track ring */}
+        <circle cx={cx} cy={cy} r={(outerR + innerR) / 2} fill="none" stroke="var(--line)" strokeWidth={thickness} />
+        {/* Segments */}
+        {arcs.map((a, i) => (
+          <path key={i} d={buildArc(a.start, a.end)} fill={a.color}
+            opacity={hovered === null || hovered === i ? 1 : 0.22}
+            onMouseEnter={() => setHovered(i)}
+            onTouchStart={(e) => { e.preventDefault(); setHovered(hovered === i ? null : i); }}
+            style={{ cursor: 'pointer', transition: 'opacity 140ms' }}
+          />
+        ))}
+        {/* Center value */}
+        <text x={cx} y={cy - 4} textAnchor="middle"
+          fontFamily="Space Grotesk" fontWeight="700" fontSize={hov ? '18' : '22'}
+          fill={hov ? hov.color : 'var(--ink)'}>
+          {hov ? hov.value.toFixed(2) : segments.length}
+        </text>
+        <text x={cx} y={cy + 14} textAnchor="middle"
+          fontFamily="inherit" fontSize="11" fill="var(--ink-3)">
+          {hov ? (hov.unit || '') : 'วัตถุดิบ'}
+        </text>
+      </svg>
+      {/* Hover label below chart */}
+      <div style={{ height: 18, fontSize: 12, fontWeight: 600, textAlign: 'center', maxWidth: size,
+        color: hov ? hov.color : 'var(--ink-3)', opacity: hov ? 1 : 0.45, transition: 'all 140ms' }}>
+        {hov ? hov.label : '— เลื่อนเมาส์ไปที่กราฟ —'}
+      </div>
+    </div>
+  );
+}
+
 export function AppShell({ user, onLogout, nav, current, onNav, children }) {
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
   const handleNav = (key) => { onNav(key); setSidebarOpen(false); };
