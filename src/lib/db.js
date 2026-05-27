@@ -24,7 +24,7 @@ function toRecord(r) {
   return {
     id: r.id, type: r.type,
     date: r.date, time: r.time,
-    branch_id: r.branchId, menu_id: r.menuId,
+    branch_id: r.branchId || null, menu_id: r.menuId,
     qty: r.qty, unit: r.unit,
     status: r.status || null, reason: r.reason || null,
     note: r.note || null,
