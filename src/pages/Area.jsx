@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { AppShell, PageHeader, StatCard, Icon, Empty, Donut, useIsMobile } from '../components/ui.jsx';
+import { AppShell, PageHeader, StatCard, Icon, Empty, Donut, InteractiveDonut, useIsMobile } from '../components/ui.jsx';
 import { SplitHistoryPage, DefectHistoryPage } from '../components/History.jsx';
 import { todayISO, fmtDateTH, fmtNum } from '../lib/helpers.js';
 
@@ -92,6 +92,11 @@ function Stat({ n, l, c }) {
 }
 
 /* ---------- Defect by material dashboard (shared with Admin) ---------- */
+const DEFECT_COLORS = [
+  'var(--bad)', 'var(--warn)', 'var(--info)', 'var(--amber)', 'var(--matcha)',
+  '#9b8afb', '#f472b6', '#34d399', '#60a5fa', '#fb923c',
+];
+
 export function DefectMaterialDashboard({ records, store }) {
   const isMobile = useIsMobile();
   const breakdown = useMemo(() => {
@@ -116,12 +121,18 @@ export function DefectMaterialDashboard({ records, store }) {
     return { rows: Object.values(map).sort((a, b) => b.qty - a.qty), totalGrams };
   }, [records, store]);
 
-  const top = breakdown.rows.slice(0, 8);
-  const max = top[0]?.qty || 1;
+  const top10 = breakdown.rows.slice(0, 10);
+  const maxQty = top10[0]?.qty || 1;
+  const donutSegs = top10.slice(0, 5).map((b, i) => ({
+    label: b.name,
+    value: Math.round(b.qty * 100) / 100,
+    unit: b.unit,
+    color: DEFECT_COLORS[i],
+  }));
 
   return (
     <div className="card" style={{ padding: '24px 26px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18, gap: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 22, gap: 14 }}>
         <div>
           <h3 className="font-display" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>เสียหายรายวัตถุดิบ</h3>
           <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 4 }}>
@@ -136,35 +147,47 @@ export function DefectMaterialDashboard({ records, store }) {
       {breakdown.rows.length === 0 ? (
         <Empty icon="check" title="ไม่มีของเสียในช่วงนี้" subtitle="ลองปรับช่วงวันที่" />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 30 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {top.map(b => (
-              <div key={b.code} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, gap: 10 }}>
-                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    <span className="font-mono" style={{ fontSize: 11, color: 'var(--ink-3)', marginRight: 8 }}>{b.code}</span>
-                    <span style={{ fontWeight: 500 }}>{b.name}</span>
-                  </span>
-                  <span className="num" style={{ color: 'var(--bad)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {b.qty.toFixed(2)} <span style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 400 }}>{b.unit}</span>
-                  </span>
-                </div>
-                <div className="bar"><i style={{ width: `${(b.qty / max) * 100}%`, background: 'var(--bad)' }} /></div>
-              </div>
-            ))}
-          </div>
-          <div style={{ display: 'flex', justifyContent: isMobile ? 'center' : undefined }}>
-            <Donut
-              segments={top.slice(0, 5).map((b, i) => ({
-                label: b.name,
-                value: Math.round(b.qty * 100) / 100,
-                color: ['var(--bad)', 'var(--warn)', 'var(--info)', 'var(--amber)', 'var(--matcha)'][i],
-              }))}
-              size={isMobile ? 140 : 180}
-              thickness={isMobile ? 22 : 26}
-              stack={isMobile}
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'auto 1fr', gap: isMobile ? 24 : 36, alignItems: 'flex-start' }}>
+
+          {/* Donut chart */}
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <InteractiveDonut
+              segments={donutSegs}
+              size={isMobile ? 170 : 210}
+              thickness={isMobile ? 28 : 34}
             />
           </div>
+
+          {/* Top 10 list */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-3)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 14 }}>
+              Top {top10.length} วัตถุดิบเสียหาย
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {top10.map((b, i) => (
+                <div key={b.code}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                    <span style={{
+                      width: 20, height: 20, borderRadius: 6,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, fontWeight: 700, flexShrink: 0,
+                      background: i < 5 ? DEFECT_COLORS[i] : 'var(--line)',
+                      color: i < 5 ? '#fff' : 'var(--ink-3)',
+                    }}>{i + 1}</span>
+                    <span className="font-mono" style={{ fontSize: 11, color: 'var(--ink-3)', flexShrink: 0 }}>{b.code}</span>
+                    <span style={{ fontWeight: 500, fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
+                    <span className="num" style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, color: i < 3 ? DEFECT_COLORS[i] : 'var(--ink-2)' }}>
+                      {b.qty.toFixed(2)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--ink-3)' }}>{b.unit}</span>
+                    </span>
+                  </div>
+                  <div className="bar">
+                    <i style={{ width: `${(b.qty / maxQty) * 100}%`, background: i < 5 ? DEFECT_COLORS[i] : 'var(--ink-3)', opacity: i < 5 ? 1 : 0.5 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </div>
       )}
     </div>
