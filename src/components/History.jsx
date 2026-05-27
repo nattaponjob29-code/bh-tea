@@ -189,6 +189,13 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
   const [deleteAllOpen, setDeleteAllOpen] = useState(false);
   const [expandedId, setExpandedId] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   const branchList = branches || store.branches;
 
@@ -279,35 +286,37 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, gap: 20 }} className="fade-up">
           <div>
             {eyebrow && <div style={{ fontSize: 12, color: 'var(--ink-3)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 500 }}>{eyebrow}</div>}
-            <h1 className="font-display" style={{ margin: 0, fontSize: 36, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{title}</h1>
+            <h1 className="font-display" style={{ margin: 0, fontSize: 'clamp(24px, 5vw, 36px)', fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{title}</h1>
           </div>
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14, gap: 14, flexWrap: 'wrap' }}>
+      {/* Section header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${accent} 16%, white)`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: `color-mix(in oklch, ${accent} 16%, white)`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Icon name={sectionIcon} size={18} />
           </div>
           <div>
-            <h2 className="font-display" style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em' }}>{sectionTitle}</h2>
+            <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em' }}>{sectionTitle}</h2>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>
-              <span className="num">{filtered.length}</span> รายการที่แสดง · จากทั้งหมด <span className="num">{scopedRecords.length}</span>
+              <span className="num">{filtered.length}</span> รายการ · จากทั้งหมด <span className="num">{scopedRecords.length}</span>
             </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {refresh && filtered.length > 0 && (
             <button className="btn danger" onClick={() => setDeleteAllOpen(true)}>
-              <Icon name="trash" size={14} /> ลบทั้งหมด ({filtered.length})
+              <Icon name="trash" size={14} /> {isMobile ? `ลบ (${filtered.length})` : `ลบทั้งหมด (${filtered.length})`}
             </button>
           )}
           <button className="btn ghost" onClick={onExport} disabled={filtered.length === 0}>
-            <Icon name="arrow-down" size={14} /> Export CSV
+            <Icon name="arrow-down" size={14} /> {isMobile ? 'CSV' : 'Export CSV'}
           </button>
         </div>
       </div>
 
+      {/* Tabs */}
       {tabs && (
         <div className="card" style={{ padding: '6px', marginBottom: 14, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           {tabs.map(t => (
@@ -325,23 +334,149 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: showBranchFilter ? '1fr 200px 160px 160px auto' : '1fr 160px 160px auto', gap: 10, marginBottom: 14 }}>
-        <SearchBox value={q} onChange={setQ} placeholder="ค้นหาล็อตวัตถุดิบ, ID, เมนู, ผู้ผลิต..." />
-        {showBranchFilter && (
-          <select className="inp" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
-            <option value="all">ทุกสาขา</option>
-            {branchList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        )}
-        <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
-        <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
-        <DateQuickPresets setFrom={setFrom} setTo={setTo} />
-      </div>
+      {/* Filter bar — responsive */}
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          <SearchBox value={q} onChange={setQ} placeholder="ค้นหา ID, เมนู, ล็อตวัตถุดิบ..." />
+          {showBranchFilter && (
+            <select className="inp" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
+              <option value="all">ทุกสาขา</option>
+              {branchList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
+            <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
+            <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
+            <DateQuickPresets setFrom={setFrom} setTo={setTo} />
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: showBranchFilter ? '1fr 200px 160px 160px auto' : '1fr 160px 160px auto', gap: 10, marginBottom: 14 }}>
+          <SearchBox value={q} onChange={setQ} placeholder="ค้นหาล็อตวัตถุดิบ, ID, เมนู, ผู้ผลิต..." />
+          {showBranchFilter && (
+            <select className="inp" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
+              <option value="all">ทุกสาขา</option>
+              {branchList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          )}
+          <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
+          <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
+          <DateQuickPresets setFrom={setFrom} setTo={setTo} />
+        </div>
+      )}
 
+      {/* Records — card on mobile, table on desktop */}
       <div className="card" style={{ overflow: 'hidden' }}>
         {filtered.length === 0 ? (
           <Empty icon="search" title="ไม่พบข้อมูล" subtitle="ลองปรับตัวกรองหรือช่วงวันที่" />
+        ) : isMobile ? (
+          /* ── Mobile card layout ── */
+          <div>
+            {filtered.slice(0, 200).map((r, idx) => {
+              const m = store.menus.find(x => x.id === r.menuId);
+              const b = store.branches.find(x => x.id === r.branchId);
+              const isProd = r.type === 'production';
+              const lotEntries = r.materialLots ? Object.entries(r.materialLots).filter(([, v]) => v && String(v).trim()) : [];
+              const matBd = r.materialBreakdown && r.materialBreakdown.length;
+              const ql = q.trim().toLowerCase();
+              const matchedLots = ql ? lotEntries.filter(([, lot]) => String(lot).toLowerCase().includes(ql)) : [];
+              const expanded = expandedId === r.id;
+              const hasDetail = lotEntries.length > 0 || (mode === 'defect' && matBd > 0) || r.note;
+
+              return (
+                <div key={r.id} style={{ borderBottom: idx < Math.min(filtered.length, 200) - 1 ? '1px solid var(--line)' : 'none', background: expanded ? 'var(--bg)' : undefined }}>
+                  <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                    {/* Expand toggle */}
+                    <div style={{ paddingTop: 2, flexShrink: 0, width: 24 }}>
+                      {hasDetail && (
+                        <button
+                          onClick={() => setExpandedId(expanded ? null : r.id)}
+                          style={{ width: 24, height: 24, borderRadius: 6, background: expanded ? 'var(--ink)' : 'var(--bg-2)', color: expanded ? '#fffdf7' : 'var(--ink-2)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 120ms' }}
+                        >
+                          <Icon name="chevron" size={11} style={{ transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform 200ms' }} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Main content */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      {/* Row 1: ID + badge + delete */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3, gap: 6 }}>
+                        <span className="font-mono" style={{ fontSize: 11, color: 'var(--ink-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.id}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                          {mode === 'production' && isProd && (
+                            r.status === 'passed'
+                              ? <span className="badge ok"><span className="dot" />ผ่าน</span>
+                              : <span className="badge bad"><span className="dot" />ไม่ผ่าน</span>
+                          )}
+                          {refresh && (
+                            <button className="btn ghost sm" onClick={() => setDeleteTarget(r)} title="ลบ">
+                              <Icon name="trash" size={12} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Menu name */}
+                      <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', marginBottom: 5, lineHeight: 1.3 }}>
+                        {m?.name || '—'}
+                      </div>
+
+                      {/* Date + time + branch */}
+                      <div style={{ fontSize: 12, color: 'var(--ink-3)', display: 'flex', flexWrap: 'wrap', columnGap: 10, rowGap: 2, marginBottom: 4 }}>
+                        <span>{fmtDateTH(r.date)}{r.time ? ` · ${r.time}` : ''}{r.backdated ? ' *' : ''}</span>
+                        {showBranch && b?.name && <span style={{ color: 'var(--ink-2)' }}>{b.name}</span>}
+                      </div>
+
+                      {/* Qty */}
+                      <div className="num" style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-2)', marginBottom: 3 }}>
+                        {r.qty?.toLocaleString()} <span style={{ fontWeight: 400, color: 'var(--ink-3)', fontSize: 12 }}>{r.unit}</span>
+                      </div>
+
+                      {/* Reason / note */}
+                      {(r.reason || r.note) && (
+                        <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2, lineHeight: 1.4 }}>
+                          {r.reason || r.note}
+                        </div>
+                      )}
+
+                      {/* Defect material summary */}
+                      {mode === 'defect' && matBd > 0 && (
+                        <div style={{ fontSize: 11, color: 'var(--bad)', marginTop: 4 }}>
+                          {r.materialBreakdown.slice(0, 2).map(x => `${x.name} ${x.qty.toFixed(1)}${x.unit}`).join(', ')}
+                          {r.materialBreakdown.length > 2 && ` +${r.materialBreakdown.length - 2} อื่น`}
+                        </div>
+                      )}
+
+                      {/* Matched lot highlights */}
+                      {matchedLots.length > 0 && (
+                        <div style={{ marginTop: 5, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {matchedLots.map(([code, lot]) => {
+                            const ing = store.ingredients.find(i => i.code === code);
+                            return (
+                              <span key={code} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 99, fontSize: 11, background: 'color-mix(in oklch, var(--amber) 18%, white)', color: '#8a5a17', fontWeight: 500 }}>
+                                <span className="font-mono">{lot}</span>
+                                <span style={{ opacity: .7 }}>· {ing?.name || code}</span>
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Expanded detail */}
+                  {expanded && (
+                    <div className="fade-in" style={{ padding: '4px 14px 16px 46px', background: 'var(--bg)', borderTop: '1px solid var(--line)' }}>
+                      <DetailPanel record={r} store={store} mode={mode} lotEntries={lotEntries} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         ) : (
+          /* ── Desktop table layout ── */
           <div style={{ overflowX: 'auto' }}>
             <table className="t">
               <thead>
@@ -448,6 +583,7 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
           </div>
         )}
       </div>
+
       {filtered.length > 200 && (
         <div style={{ textAlign: 'center', marginTop: 10, color: 'var(--ink-3)', fontSize: 12 }}>
           แสดง 200 รายการแรก จากทั้งหมด {filtered.length}
@@ -497,7 +633,7 @@ export function SplitHistoryPage({ records, store, title, eyebrow, showBranch, s
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, gap: 20 }} className="fade-up">
         <div>
           {eyebrow && <div style={{ fontSize: 12, color: 'var(--ink-3)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 500 }}>{eyebrow}</div>}
-          <h1 className="font-display" style={{ margin: 0, fontSize: 36, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{title}</h1>
+          <h1 className="font-display" style={{ margin: 0, fontSize: 'clamp(24px, 5vw, 36px)', fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{title}</h1>
           <div style={{ marginTop: 8, fontSize: 15, color: 'var(--ink-3)' }}>ประวัติการผลิต · ลบและ Export ได้</div>
         </div>
       </div>
@@ -514,7 +650,14 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
   const [from, setFrom] = useState(() => todayISO());
   const [to, setTo] = useState(() => todayISO());
   const [branchFilter, setBranchFilter] = useState('all');
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const branchList = branches || store.branches;
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
 
   const filteredRecs = useMemo(() => records.filter(r => {
     if (from && r.date < from) return false;
@@ -561,36 +704,84 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 14, gap: 14, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'color-mix(in oklch, var(--bad) 16%, white)', color: 'var(--bad)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: 38, height: 38, borderRadius: 10, background: 'color-mix(in oklch, var(--bad) 16%, white)', color: 'var(--bad)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Icon name="box" size={18} />
           </div>
           <div>
-            <h2 className="font-display" style={{ margin: 0, fontSize: 22, fontWeight: 600, letterSpacing: '-0.01em' }}>เสียหายรายวัตถุดิบ</h2>
+            <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em' }}>เสียหายรายวัตถุดิบ</h2>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>
-              <span className="num">{breakdown.length}</span> วัตถุดิบ · จาก <span className="num">{filteredRecs.length}</span> ครั้ง · เบสรวม <span className="num">{fmtNum(totalGrams)}</span> กรัม
+              <span className="num">{breakdown.length}</span> วัตถุดิบ · <span className="num">{filteredRecs.length}</span> ครั้ง · <span className="num">{fmtNum(totalGrams)}</span> กรัม
             </div>
           </div>
         </div>
-        <button className="btn ghost" onClick={onExport} disabled={breakdown.length === 0}><Icon name="arrow-down" size={14} /> Export CSV</button>
+        <button className="btn ghost" onClick={onExport} disabled={breakdown.length === 0}>
+          <Icon name="arrow-down" size={14} /> {isMobile ? 'CSV' : 'Export CSV'}
+        </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: showBranchFilter ? '1fr 200px 160px 160px auto' : '1fr 160px 160px auto', gap: 10, marginBottom: 14 }}>
-        <SearchBox value={q} onChange={setQ} placeholder="ค้นหารหัส หรือชื่อวัตถุดิบ..." />
-        {showBranchFilter && (
-          <select className="inp" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
-            <option value="all">ทุกสาขา</option>
-            {branchList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-          </select>
-        )}
-        <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
-        <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
-        <DateQuickPresets setFrom={setFrom} setTo={setTo} />
-      </div>
+      {/* Filter bar — responsive */}
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          <SearchBox value={q} onChange={setQ} placeholder="ค้นหารหัส หรือชื่อวัตถุดิบ..." />
+          {showBranchFilter && (
+            <select className="inp" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
+              <option value="all">ทุกสาขา</option>
+              {branchList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
+            <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
+            <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
+            <DateQuickPresets setFrom={setFrom} setTo={setTo} />
+          </div>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: showBranchFilter ? '1fr 200px 160px 160px auto' : '1fr 160px 160px auto', gap: 10, marginBottom: 14 }}>
+          <SearchBox value={q} onChange={setQ} placeholder="ค้นหารหัส หรือชื่อวัตถุดิบ..." />
+          {showBranchFilter && (
+            <select className="inp" value={branchFilter} onChange={e => setBranchFilter(e.target.value)}>
+              <option value="all">ทุกสาขา</option>
+              {branchList.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          )}
+          <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
+          <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
+          <DateQuickPresets setFrom={setFrom} setTo={setTo} />
+        </div>
+      )}
 
       <div className="card" style={{ overflow: 'hidden' }}>
-        {breakdown.length === 0 ? <Empty icon="check" title="ยังไม่มีของเสียในช่วงนี้" subtitle="ลองปรับช่วงวันที่หรือเช็คตัวกรอง" /> : (
+        {breakdown.length === 0 ? (
+          <Empty icon="check" title="ยังไม่มีของเสียในช่วงนี้" subtitle="ลองปรับช่วงวันที่หรือเช็คตัวกรอง" />
+        ) : isMobile ? (
+          /* ── Mobile card layout ── */
+          <div>
+            {breakdown.map((b, idx) => {
+              const max = breakdown[0]?.qty || 1;
+              return (
+                <div key={b.code} style={{ padding: '12px 14px', borderBottom: idx < breakdown.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                    <span className="font-mono" style={{ fontSize: 12, color: 'var(--ink-3)' }}>{b.code}</span>
+                    <span className="num" style={{ color: 'var(--bad)', fontWeight: 700, fontSize: 15, fontFamily: 'Space Grotesk', flexShrink: 0, marginLeft: 8 }}>
+                      {b.qty.toFixed(2)} <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 400 }}>{b.unit}</span>
+                    </span>
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', marginBottom: 8 }}>{b.name}</div>
+                  <div className="bar" style={{ marginBottom: 6 }}>
+                    <i style={{ width: `${(b.qty / max) * 100}%`, background: 'var(--bad)' }} />
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-3)', display: 'flex', gap: 14 }}>
+                    <span>{b.occurrences} ครั้ง</span>
+                    <span>เบสรวม {fmtNum(b.totalGrams.toFixed(0))} กรัม</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Desktop table layout ── */
           <table className="t">
             <thead>
               <tr>
@@ -627,30 +818,42 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
 
 export function DefectHistoryPage({ records, store, title, eyebrow, showBranch = true, showBranchFilter = false, refresh, branches }) {
   const [view, setView] = useState('menu');
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
   const defectRecords = useMemo(() => records.filter(r => r.type === 'defect'), [records]);
+
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 640);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+
+  const viewOptions = [
+    { k: 'menu',     l: isMobile ? 'เบสรายเมนู'   : 'ประวัติเสียหายปริมาณเบส', ic: 'alert' },
+    { k: 'material', l: isMobile ? 'รายวัตถุดิบ'   : 'เสียหายรายวัตถุดิบ',      ic: 'box' },
+  ];
 
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, gap: 20 }} className="fade-up">
         <div>
           {eyebrow && <div style={{ fontSize: 12, color: 'var(--ink-3)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 500 }}>{eyebrow}</div>}
-          <h1 className="font-display" style={{ margin: 0, fontSize: 36, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{title}</h1>
-          <div style={{ marginTop: 8, fontSize: 15, color: 'var(--ink-3)' }}>แยกดู 2 มุมมอง — ปริมาณเบสรายเมนู (กรัม) และวัตถุดิบที่เสียหายจริงตาม BOM</div>
+          <h1 className="font-display" style={{ margin: 0, fontSize: 'clamp(24px, 5vw, 36px)', fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{title}</h1>
+          {!isMobile && <div style={{ marginTop: 8, fontSize: 15, color: 'var(--ink-3)' }}>แยกดู 2 มุมมอง — ปริมาณเบสรายเมนู (กรัม) และวัตถุดิบที่เสียหายจริงตาม BOM</div>}
         </div>
       </div>
 
-      <div style={{ display: 'inline-flex', padding: 4, background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 99, marginBottom: 20, gap: 0 }}>
-        {[
-          { k: 'menu',     l: 'ประวัติเสียหายปริมาณเบส', ic: 'alert' },
-          { k: 'material', l: 'เสียหายรายวัตถุดิบ',      ic: 'box' },
-        ].map(t => (
+      <div style={{ display: isMobile ? 'flex' : 'inline-flex', padding: 4, background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 99, marginBottom: 20, gap: 0 }}>
+        {viewOptions.map(t => (
           <button key={t.k} onClick={() => setView(t.k)} style={{
-            padding: '10px 18px', borderRadius: 99, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+            padding: isMobile ? '10px 0' : '10px 18px',
+            flex: isMobile ? 1 : undefined,
+            justifyContent: isMobile ? 'center' : undefined,
+            borderRadius: 99, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
             background: view === t.k ? 'var(--paper)' : 'transparent',
             color: view === t.k ? 'var(--ink)' : 'var(--ink-3)',
             boxShadow: view === t.k ? 'var(--shadow-sm)' : 'none',
-            fontSize: 14, fontWeight: view === t.k ? 600 : 500,
-            display: 'inline-flex', alignItems: 'center', gap: 8, transition: 'all 140ms', whiteSpace: 'nowrap',
+            fontSize: isMobile ? 13 : 14, fontWeight: view === t.k ? 600 : 500,
+            display: 'inline-flex', alignItems: 'center', gap: 6, transition: 'all 140ms',
           }}>
             <Icon name={t.ic} size={14} />{t.l}
           </button>
