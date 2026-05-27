@@ -9,6 +9,14 @@
 alter table records alter column id type text;
 
 -- ============================================================
+-- FIX 4: Admin ลบ record ของใครก็ได้
+-- ============================================================
+drop policy if exists "admin delete any record" on records;
+create policy "admin delete any record" on records
+  for delete to authenticated
+  using (is_admin());
+
+-- ============================================================
 -- FIX 2: Admin สามารถแก้ไข profile ของ user อื่นได้
 -- แก้ปัญหา "ผูกสาขาแล้วแต่ไม่บันทึก" เพราะ RLS บล็อก
 -- ============================================================

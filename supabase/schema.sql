@@ -153,6 +153,10 @@ create policy "auth read profiles"    on profiles    for select using (auth.role
 create policy "auth insert records"     on records for insert with check (auth.role() = 'authenticated');
 create policy "auth delete own records" on records for delete using (by_user = auth.uid());
 
+-- Admin can delete any record
+drop policy if exists "admin delete any record" on records;
+create policy "admin delete any record" on records for delete to authenticated using (is_admin());
+
 -- Profiles: users can update their own profile
 create policy "auth update own profile" on profiles for update using (id = auth.uid());
 
