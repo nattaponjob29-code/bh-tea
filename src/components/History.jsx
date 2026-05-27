@@ -3,7 +3,7 @@ import { Icon, SearchBox, Empty, Modal, useToast } from './ui.jsx';
 import { fmtDateTH, fmtNum, todayISO, csvCell } from '../lib/helpers.js';
 import { deleteRecord, deleteRecords } from '../lib/db.js';
 
-export function DateQuickPresets({ setFrom, setTo }) {
+export function DateQuickPresets({ setFrom, setTo, compact = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -35,8 +35,9 @@ export function DateQuickPresets({ setFrom, setTo }) {
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button className="btn ghost" onClick={() => setOpen(o => !o)} style={{ padding: '10px 14px' }}>
-        <Icon name="calendar" size={14} /> ช่วงเวลา <Icon name="chevron" size={12} />
+      <button className="btn ghost" onClick={() => setOpen(o => !o)} style={{ padding: compact ? '10px 12px' : '10px 14px' }}>
+        <Icon name="calendar" size={14} />
+        {!compact && <> ช่วงเวลา <Icon name="chevron" size={12} /></>}
       </button>
       {open && (
         <div className="card fade-up" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 50, padding: 6, minWidth: 180, boxShadow: 'var(--shadow-lg)' }}>
@@ -345,9 +346,9 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
             </select>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
-            <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
-            <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
-            <DateQuickPresets setFrom={setFrom} setTo={setTo} />
+            <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} style={{ fontSize: 13, padding: '8px 8px' }} />
+            <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} style={{ fontSize: 13, padding: '8px 8px' }} />
+            <DateQuickPresets setFrom={setFrom} setTo={setTo} compact />
           </div>
         </div>
       ) : (
@@ -732,9 +733,9 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
             </select>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
-            <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
-            <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
-            <DateQuickPresets setFrom={setFrom} setTo={setTo} />
+            <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} style={{ fontSize: 13, padding: '8px 8px' }} />
+            <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} style={{ fontSize: 13, padding: '8px 8px' }} />
+            <DateQuickPresets setFrom={setFrom} setTo={setTo} compact />
           </div>
         </div>
       ) : (
