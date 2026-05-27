@@ -38,6 +38,16 @@ export function Icon({ name, size = 18, stroke = 1.6, ...rest }) {
 const ToastCtx = createContext(null);
 export const useToast = () => useContext(ToastCtx);
 
+export function useIsMobile(breakpoint = 640) {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < breakpoint);
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const push = useCallback((msg, kind = 'ok') => {
@@ -246,14 +256,15 @@ export function AppShell({ user, onLogout, nav, current, onNav, children }) {
 }
 
 export function PageHeader({ eyebrow, title, subtitle, right }) {
+  const isMobile = useIsMobile();
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, gap: 20 }} className="fade-up">
+    <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'flex-end', marginBottom: 28, gap: isMobile ? 14 : 20 }} className="fade-up">
       <div>
         {eyebrow && <div style={{ fontSize: 12, color: 'var(--ink-3)', letterSpacing: '.12em', textTransform: 'uppercase', marginBottom: 8, fontWeight: 500 }}>{eyebrow}</div>}
-        <h1 className="font-display" style={{ margin: 0, fontSize: 36, fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{title}</h1>
-        {subtitle && <div style={{ marginTop: 8, fontSize: 15, color: 'var(--ink-3)' }}>{subtitle}</div>}
+        <h1 className="font-display" style={{ margin: 0, fontSize: 'clamp(22px, 5vw, 36px)', fontWeight: 600, letterSpacing: '-0.02em', lineHeight: 1.1 }}>{title}</h1>
+        {subtitle && !isMobile && <div style={{ marginTop: 8, fontSize: 15, color: 'var(--ink-3)' }}>{subtitle}</div>}
       </div>
-      {right && <div>{right}</div>}
+      {right && <div style={{ width: isMobile ? '100%' : undefined }}>{right}</div>}
     </div>
   );
 }

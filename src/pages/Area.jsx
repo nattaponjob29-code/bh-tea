@@ -1,26 +1,28 @@
 import { useState, useMemo } from 'react';
-import { AppShell, PageHeader, StatCard, Icon, Empty, Donut } from '../components/ui.jsx';
+import { AppShell, PageHeader, StatCard, Icon, Empty, Donut, useIsMobile } from '../components/ui.jsx';
 import { SplitHistoryPage, DefectHistoryPage } from '../components/History.jsx';
 import { todayISO, fmtDateTH, fmtNum } from '../lib/helpers.js';
 
 /* ---------- Date range picker ---------- */
 export function DateRangePicker({ from, to, setFrom, setTo }) {
+  const isMobile = useIsMobile();
   const presets = [
     { l: '7 วันล่าสุด',  fn: () => { const d = new Date(); const f = new Date(); f.setDate(d.getDate()-6); setFrom(f.toISOString().slice(0,10)); setTo(d.toISOString().slice(0,10)); } },
     { l: '14 วันล่าสุด', fn: () => { const d = new Date(); const f = new Date(); f.setDate(d.getDate()-13); setFrom(f.toISOString().slice(0,10)); setTo(d.toISOString().slice(0,10)); } },
     { l: 'วันนี้',       fn: () => { const t = todayISO(); setFrom(t); setTo(t); } },
   ];
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      {presets.map(p => (
-        <button key={p.l} className="chip" onClick={p.fn}>{p.l}</button>
-      ))}
-      <div style={{ width: 1, height: 24, background: 'var(--line-2)' }} />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {presets.map(p => (
+          <button key={p.l} className="chip" onClick={p.fn}>{p.l}</button>
+        ))}
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon name="calendar" size={14} style={{ color: 'var(--ink-3)' }} />
-        <input type="date" className="inp" style={{ padding: '7px 10px', width: 140, fontSize: 13 }} value={from} onChange={e => setFrom(e.target.value)} />
-        <span style={{ color: 'var(--ink-3)' }}>—</span>
-        <input type="date" className="inp" style={{ padding: '7px 10px', width: 140, fontSize: 13 }} value={to} onChange={e => setTo(e.target.value)} />
+        <Icon name="calendar" size={14} style={{ color: 'var(--ink-3)', flexShrink: 0 }} />
+        <input type="date" className="inp" style={{ padding: '7px 8px', flex: 1, minWidth: 0, fontSize: isMobile ? 13 : 13 }} value={from} onChange={e => setFrom(e.target.value)} />
+        <span style={{ color: 'var(--ink-3)', flexShrink: 0 }}>—</span>
+        <input type="date" className="inp" style={{ padding: '7px 8px', flex: 1, minWidth: 0, fontSize: 13 }} value={to} onChange={e => setTo(e.target.value)} />
       </div>
     </div>
   );
@@ -91,6 +93,7 @@ function Stat({ n, l, c }) {
 
 /* ---------- Defect by material dashboard (shared with Admin) ---------- */
 export function DefectMaterialDashboard({ records, store }) {
+  const isMobile = useIsMobile();
   const breakdown = useMemo(() => {
     const map = {};
     let totalGrams = 0;
@@ -133,7 +136,7 @@ export function DefectMaterialDashboard({ records, store }) {
       {breakdown.rows.length === 0 ? (
         <Empty icon="check" title="ไม่มีของเสียในช่วงนี้" subtitle="ลองปรับช่วงวันที่" />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 30 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 30 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {top.map(b => (
               <div key={b.code} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -173,6 +176,7 @@ export function DefectMaterialDashboard({ records, store }) {
 
 /* ---------- Area Dashboard ---------- */
 function AreaDashboard({ user, myBranches, records, store }) {
+  const isMobile = useIsMobile();
   const initEnd = todayISO();
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
@@ -222,7 +226,7 @@ function AreaDashboard({ user, myBranches, records, store }) {
         right={<DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 18, marginBottom: 22 }} className="fade-up">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? 12 : 18, marginBottom: 22 }} className="fade-up">
         <StatCard label="ล็อตการผลิต" value={fmtNum(prod.length)} sub={`${days.length} วัน`} icon="factory" accent="var(--amber)" trend={dailyProd} />
         <StatCard label="ผ่าน QC" value={fmtNum(passed.length)} sub={`${passRate}% pass rate`} icon="check" accent="var(--matcha)" trend={dailyPass} />
         <StatCard label="ไม่ผ่าน QC" value={fmtNum(failed.length)} sub="ต้องปรับปรุง" icon="alert" accent="var(--bad)" trend={dailyFail} />
@@ -251,7 +255,7 @@ function AreaDashboard({ user, myBranches, records, store }) {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 22, marginBottom: 22 }}>
         <div className="card" style={{ padding: '24px 26px' }}>
           <h3 className="font-display" style={{ margin: '0 0 18px', fontSize: 18, fontWeight: 600 }}>การผลิตรายสาขา</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -294,7 +298,7 @@ function AreaDashboard({ user, myBranches, records, store }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 22, marginBottom: 22 }}>
         <div className="card" style={{ padding: '24px 26px' }}>
           <h3 className="font-display" style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>สาเหตุ "ไม่ผ่าน QC" สูงสุด</h3>
           {topFails.length === 0
@@ -316,6 +320,7 @@ function AreaDashboard({ user, myBranches, records, store }) {
 
 /* ---------- Area > Branches ---------- */
 function AreaBranches({ myBranches, records }) {
+  const isMobile = useIsMobile();
   const initEnd = todayISO();
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
@@ -330,7 +335,7 @@ function AreaBranches({ myBranches, records }) {
         subtitle="สรุปสถิติการผลิตและของเสียรายสาขา"
         right={<DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />}
       />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 18 }} className="fade-up">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 18 }} className="fade-up">
         {myBranches.map(b => {
           const recs = inRange.filter(r => r.branchId === b.id);
           const prod = recs.filter(r => r.type === 'production');

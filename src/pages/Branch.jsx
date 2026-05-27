@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { AppShell, PageHeader, Icon, StatCard, Empty, Modal, useToast } from '../components/ui.jsx';
+import { AppShell, PageHeader, Icon, StatCard, Empty, Modal, useToast, useIsMobile } from '../components/ui.jsx';
 import { HistoryView, DefectHistoryPage } from '../components/History.jsx';
 import { todayISO, nowHM, fmtDateTH, fmtNum, greetingTH } from '../lib/helpers.js';
 import { DEFECT_REASONS, FAIL_REASONS } from '../lib/constants.js';
@@ -30,6 +30,7 @@ export function BranchView({ user, store, refresh, onLogout }) {
 }
 
 function BranchHome({ user, branch, records, go, store }) {
+  const isMobile = useIsMobile();
   const today = todayISO();
   const todayProd = records.filter(r => r.type === 'production' && r.date === today);
   const todayDef  = records.filter(r => r.type === 'defect'     && r.date === today);
@@ -62,13 +63,13 @@ function BranchHome({ user, branch, records, go, store }) {
           </div>
         }
       />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 18, marginBottom: 24 }} className="fade-up">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? 12 : 18, marginBottom: 24 }} className="fade-up">
         <StatCard label="ล็อตวันนี้"   value={todayProd.length} icon="factory" accent="var(--amber)"  trend={trend} />
         <StatCard label="ผ่าน QC"      value={todayPass} sub={`${passRate}% ของวันนี้`} icon="check" accent="var(--matcha)" />
         <StatCard label="ไม่ผ่าน QC"   value={todayFail} sub="ต้องแก้ไข" icon="alert" accent="var(--bad)" />
-        <StatCard label="ของเสียหาย"   value={todayDef.length} sub={`รวมทั้งหมด ${records.filter(r => r.type === 'defect').length} ครั้ง`} icon="trash" accent="var(--info)" />
+        <StatCard label="ของเสียหาย"   value={todayDef.length} sub={`รวม ${records.filter(r => r.type === 'defect').length} ครั้ง`} icon="trash" accent="var(--info)" />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 18 }}>
         <div className="card" style={{ padding: '22px 26px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <h3 className="font-display" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>กิจกรรมล่าสุด</h3>

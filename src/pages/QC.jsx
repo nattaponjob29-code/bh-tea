@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AppShell, PageHeader, StatCard, Icon, Empty } from '../components/ui.jsx';
+import { AppShell, PageHeader, StatCard, Icon, Empty, useIsMobile } from '../components/ui.jsx';
 import { SplitHistoryPage, DefectHistoryPage } from '../components/History.jsx';
 import { DateRangePicker, StackedBars, Legend } from './Area.jsx';
 import { todayISO, fmtDateTH, fmtNum } from '../lib/helpers.js';
@@ -39,6 +39,7 @@ function Mini({ n, l, c }) {
 
 /* ---------- QC Overview ---------- */
 function QCOverview({ store }) {
+  const isMobile = useIsMobile();
   const initEnd = todayISO();
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
@@ -86,7 +87,7 @@ function QCOverview({ store }) {
         right={<DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 18, marginBottom: 22 }} className="fade-up">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? 12 : 18, marginBottom: 22 }} className="fade-up">
         <StatCard label="ล็อตทั้งหมด" value={fmtNum(prod.length)} sub={`${store.branches.length} สาขา`} icon="factory" accent="var(--amber)" />
         <StatCard label="Pass Rate" value={`${passRate}%`} sub={`${fmtNum(passed.length)} / ${fmtNum(prod.length)}`} icon="check" accent="var(--matcha)" />
         <StatCard label="ไม่ผ่าน QC" value={fmtNum(failed.length)} sub="ต้องตรวจสอบ" icon="alert" accent="var(--bad)" trend={dailyFail} />
@@ -94,12 +95,12 @@ function QCOverview({ store }) {
       </div>
 
       <div className="card" style={{ padding: '24px 26px', marginBottom: 22 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, gap: 10, flexWrap: 'wrap' }}>
           <div>
             <h3 className="font-display" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Quality Trend</h3>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 4 }}>{fmtDateTH(from)} — {fmtDateTH(to)}</div>
           </div>
-          <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
+          <div style={{ display: 'flex', gap: 12, fontSize: 12 }}>
             <Legend color="var(--ok)" label="ผ่าน" />
             <Legend color="var(--bad)" label="ไม่ผ่าน" />
             <Legend color="var(--warn)" label="ของเสีย" />
@@ -116,7 +117,7 @@ function QCOverview({ store }) {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22, marginBottom: 22 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 22, marginBottom: 22 }}>
         <div className="card" style={{ padding: '24px 26px' }}>
           <h3 className="font-display" style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>Top สาขาคุณภาพดีที่สุด</h3>
           <RankList items={best} positive />
@@ -132,7 +133,7 @@ function QCOverview({ store }) {
         {menuFail.length === 0 ? (
           <Empty icon="check" title="ไม่มีข้อมูล" subtitle="ในช่วงเวลาที่เลือกยังไม่มีการผลิต" />
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2,1fr)', gap: 14 }}>
             {menuFail.map(({ m, total, failed, rate }) => (
               <div key={m.id} style={{ padding: '14px 16px', background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--line)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -157,6 +158,7 @@ function QCOverview({ store }) {
 
 /* ---------- All branches grid ---------- */
 function QCBranches({ store }) {
+  const isMobile = useIsMobile();
   const initEnd = todayISO();
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 13); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
@@ -171,7 +173,7 @@ function QCBranches({ store }) {
         subtitle="สถานะคุณภาพการผลิตของทุกสาขาในระบบ"
         right={<DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />}
       />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 18 }} className="fade-up">
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 18 }} className="fade-up">
         {store.branches.map(b => {
           const recs = inRange.filter(r => r.branchId === b.id);
           const prod = recs.filter(r => r.type === 'production');
@@ -210,6 +212,7 @@ function QCBranches({ store }) {
 
 /* ---------- Menu analysis ---------- */
 function QCMenus({ store }) {
+  const isMobile = useIsMobile();
   const initEnd = todayISO();
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 13); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
@@ -234,41 +237,93 @@ function QCMenus({ store }) {
         right={<DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />}
       />
       <div className="card" style={{ overflow: 'hidden' }}>
-        <table className="t">
-          <thead>
-            <tr>
-              <th>เมนู</th>
-              <th>หมวด</th>
-              <th style={{ textAlign: 'right' }}>ล็อตผลิต</th>
-              <th style={{ textAlign: 'right' }}>ผ่าน</th>
-              <th style={{ textAlign: 'right' }}>ไม่ผ่าน</th>
-              <th style={{ textAlign: 'right' }}>ของเสีย</th>
-              <th style={{ minWidth: 180 }}>Pass Rate</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(({ m, prod, passed, failed, defectQty, rate }) => (
-              <tr key={m.id}>
-                <td style={{ color: 'var(--ink)', fontWeight: 500 }}>{m.name}</td>
-                <td><span className="badge">{m.category}</span></td>
-                <td className="num" style={{ textAlign: 'right' }}>{prod}</td>
-                <td className="num" style={{ textAlign: 'right', color: 'var(--ok)' }}>{passed}</td>
-                <td className="num" style={{ textAlign: 'right', color: 'var(--bad)' }}>{failed}</td>
-                <td className="num" style={{ textAlign: 'right', color: 'var(--warn)' }}>{defectQty.toLocaleString()} {m.unit}</td>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div className="bar" style={{ flex: 1 }}>
-                      <i style={{ width: `${rate}%`, background: rate >= 90 ? 'var(--ok)' : rate >= 80 ? 'var(--warn)' : 'var(--bad)' }} />
+        {isMobile ? (
+          /* ── Mobile card layout ── */
+          <div>
+            {rows.map(({ m, prod, passed, failed, defectQty, rate }, idx) => {
+              const rateColor = rate >= 90 ? 'var(--ok)' : rate >= 80 ? 'var(--warn)' : prod > 0 ? 'var(--bad)' : 'var(--ink-3)';
+              return (
+                <div key={m.id} style={{ padding: '14px 16px', borderBottom: idx < rows.length - 1 ? '1px solid var(--line)' : 'none' }}>
+                  {/* Row 1: category + menu name + pass rate */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ marginBottom: 4 }}><span className="badge">{m.category}</span></div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--ink)', lineHeight: 1.3 }}>{m.name}</div>
                     </div>
-                    <span className="num" style={{ fontSize: 13, color: rate >= 90 ? 'var(--ok)' : rate >= 80 ? 'var(--warn)' : 'var(--bad)', fontWeight: 500, minWidth: 42, textAlign: 'right' }}>
-                      {prod ? rate.toFixed(0) + '%' : '—'}
-                    </span>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div className="num font-display" style={{ fontSize: 22, fontWeight: 700, color: rateColor, lineHeight: 1 }}>
+                        {prod > 0 ? rate.toFixed(0) + '%' : '—'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 2 }}>pass rate</div>
+                    </div>
                   </div>
-                </td>
+                  {/* Row 2: stats */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 10 }}>
+                    <div style={{ textAlign: 'center', padding: '6px 4px', background: 'var(--bg)', borderRadius: 8 }}>
+                      <div className="num" style={{ fontSize: 16, fontWeight: 600, color: 'var(--ink-2)' }}>{prod}</div>
+                      <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>ล็อต</div>
+                    </div>
+                    <div style={{ textAlign: 'center', padding: '6px 4px', background: 'var(--bg)', borderRadius: 8 }}>
+                      <div className="num" style={{ fontSize: 16, fontWeight: 600, color: 'var(--ok)' }}>{passed}</div>
+                      <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>ผ่าน</div>
+                    </div>
+                    <div style={{ textAlign: 'center', padding: '6px 4px', background: 'var(--bg)', borderRadius: 8 }}>
+                      <div className="num" style={{ fontSize: 16, fontWeight: 600, color: failed > 0 ? 'var(--bad)' : 'var(--ink-3)' }}>{failed}</div>
+                      <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>ไม่ผ่าน</div>
+                    </div>
+                    <div style={{ textAlign: 'center', padding: '6px 4px', background: 'var(--bg)', borderRadius: 8 }}>
+                      <div className="num" style={{ fontSize: 14, fontWeight: 600, color: defectQty > 0 ? 'var(--warn)' : 'var(--ink-3)' }}>{defectQty > 0 ? defectQty.toLocaleString() : '0'}</div>
+                      <div style={{ fontSize: 10, color: 'var(--ink-3)', marginTop: 2 }}>เสีย ({m.unit})</div>
+                    </div>
+                  </div>
+                  {/* Row 3: pass rate bar */}
+                  {prod > 0 && (
+                    <div className="bar">
+                      <i style={{ width: `${rate}%`, background: rateColor }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Desktop table layout ── */
+          <table className="t">
+            <thead>
+              <tr>
+                <th>เมนู</th>
+                <th>หมวด</th>
+                <th style={{ textAlign: 'right' }}>ล็อตผลิต</th>
+                <th style={{ textAlign: 'right' }}>ผ่าน</th>
+                <th style={{ textAlign: 'right' }}>ไม่ผ่าน</th>
+                <th style={{ textAlign: 'right' }}>ของเสีย</th>
+                <th style={{ minWidth: 180 }}>Pass Rate</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map(({ m, prod, passed, failed, defectQty, rate }) => (
+                <tr key={m.id}>
+                  <td style={{ color: 'var(--ink)', fontWeight: 500 }}>{m.name}</td>
+                  <td><span className="badge">{m.category}</span></td>
+                  <td className="num" style={{ textAlign: 'right' }}>{prod}</td>
+                  <td className="num" style={{ textAlign: 'right', color: 'var(--ok)' }}>{passed}</td>
+                  <td className="num" style={{ textAlign: 'right', color: 'var(--bad)' }}>{failed}</td>
+                  <td className="num" style={{ textAlign: 'right', color: 'var(--warn)' }}>{defectQty.toLocaleString()} {m.unit}</td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="bar" style={{ flex: 1 }}>
+                        <i style={{ width: `${rate}%`, background: rate >= 90 ? 'var(--ok)' : rate >= 80 ? 'var(--warn)' : 'var(--bad)' }} />
+                      </div>
+                      <span className="num" style={{ fontSize: 13, color: rate >= 90 ? 'var(--ok)' : rate >= 80 ? 'var(--warn)' : 'var(--bad)', fontWeight: 500, minWidth: 42, textAlign: 'right' }}>
+                        {prod ? rate.toFixed(0) + '%' : '—'}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </>
   );
