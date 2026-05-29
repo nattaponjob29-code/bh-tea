@@ -133,7 +133,7 @@ function DetailPanel({ record, store, mode, lotEntries }) {
                       <tr key={x.code}>
                         <td className="font-mono" style={{ fontSize: 12, color: 'var(--ink-2)' }}>{x.code}</td>
                         <td style={{ fontWeight: 500 }}>{x.name}</td>
-                        <td className="num" style={{ textAlign: 'right', color: 'var(--bad)', fontWeight: 500 }}>{x.qty.toFixed(2)} <span style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 400 }}>{x.unit}</span></td>
+                        <td className="num" style={{ textAlign: 'right', color: 'var(--bad)', fontWeight: 500 }}>{x.qty.toFixed(3)} <span style={{ fontSize: 11, color: 'var(--ink-3)', fontWeight: 400 }}>{x.unit}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -766,7 +766,7 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                     <span className="font-mono" style={{ fontSize: 12, color: 'var(--ink-3)' }}>{b.code}</span>
                     <span className="num" style={{ color: 'var(--bad)', fontWeight: 700, fontSize: 15, fontFamily: 'Space Grotesk', flexShrink: 0, marginLeft: 8 }}>
-                      {b.qty.toFixed(2)} <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 400 }}>{b.unit}</span>
+                      {b.qty.toFixed(3)} <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 400 }}>{b.unit}</span>
                     </span>
                   </div>
                   <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', marginBottom: 8 }}>{b.name}</div>
@@ -801,7 +801,7 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
                     <td className="font-mono" style={{ fontSize: 13, color: 'var(--ink)' }}>{b.code}</td>
                     <td style={{ fontWeight: 500 }}>{b.name}</td>
                     <td className="num" style={{ textAlign: 'right', color: 'var(--bad)', fontWeight: 600, fontSize: 15, fontFamily: 'Space Grotesk' }}>
-                      {b.qty.toFixed(2)} <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 400 }}>{b.unit}</span>
+                      {b.qty.toFixed(3)} <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 400 }}>{b.unit}</span>
                     </td>
                     <td className="num" style={{ textAlign: 'right', color: 'var(--ink-2)' }}>{b.occurrences}</td>
                     <td className="num" style={{ textAlign: 'right', color: 'var(--ink-3)' }}>{fmtNum(b.totalGrams.toFixed(0))}</td>
