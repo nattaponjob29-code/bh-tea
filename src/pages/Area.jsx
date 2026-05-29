@@ -125,7 +125,7 @@ export function DefectMaterialDashboard({ records, store }) {
   const maxQty = top10[0]?.qty || 1;
   const donutSegs = top10.slice(0, 5).map((b, i) => ({
     label: b.name,
-    value: Math.round(b.qty * 100) / 100,
+    value: Math.round(b.qty * 1000) / 1000,
     unit: b.unit,
     color: DEFECT_COLORS[i],
   }));
@@ -177,7 +177,7 @@ export function DefectMaterialDashboard({ records, store }) {
                     <span className="font-mono" style={{ fontSize: 11, color: 'var(--ink-3)', flexShrink: 0 }}>{b.code}</span>
                     <span style={{ fontWeight: 500, fontSize: 13, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
                     <span className="num" style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0, color: i < 3 ? DEFECT_COLORS[i] : 'var(--ink-2)' }}>
-                      {b.qty.toFixed(2)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--ink-3)' }}>{b.unit}</span>
+                      {b.qty.toFixed(3)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--ink-3)' }}>{b.unit}</span>
                     </span>
                   </div>
                   <div className="bar">
