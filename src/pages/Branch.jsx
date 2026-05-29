@@ -405,6 +405,10 @@ function BranchDefect({ user, store, refresh }) {
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [cat, setCat] = useState('all');
+
+  const categories = ['all', ...new Set(store.menus.map(m => m.category))];
+  const filteredMenus = cat === 'all' ? store.menus : store.menus.filter(m => m.category === cat);
 
   const updateItem = (i, patch) => setItems(arr => arr.map((it, idx) => idx === i ? { ...it, ...patch } : it));
   const addRow = () => setItems(arr => [...arr, { menuId: '', grams: '' }]);
@@ -458,11 +462,22 @@ function BranchDefect({ user, store, refresh }) {
               <span style={{ fontSize: 12, color: 'var(--ink-3)', fontWeight: 500, letterSpacing: '.02em', textTransform: 'uppercase' }}>รายการเมนูที่เสีย</span>
               <span style={{ fontSize: 12, color: 'var(--ink-3)' }}>รวม <span className="num" style={{ color: 'var(--ink)', fontWeight: 500 }}>{fmtNum(totalGrams)}</span> กรัม</span>
             </div>
+            <div style={{ display: 'flex', gap: 0, padding: 4, background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 99, overflow: 'hidden' }}>
+              {categories.map(c => (
+                <button key={c} onClick={() => setCat(c)} style={{ flex: 1, padding: '9px 12px', borderRadius: 99, border: 'none', background: cat === c ? 'var(--paper)' : 'transparent', color: cat === c ? 'var(--ink)' : 'var(--ink-3)', boxShadow: cat === c ? 'var(--shadow-sm)' : 'none', fontFamily: 'inherit', fontSize: 13, fontWeight: cat === c ? 600 : 500, cursor: 'pointer', transition: 'all 140ms', whiteSpace: 'nowrap' }}>
+                  {c === 'all' ? 'ทั้งหมด' : c}
+                </button>
+              ))}
+            </div>
             {items.map((it, i) => (
               <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 36px', gap: 8, alignItems: 'center' }}>
                 <select className="inp" value={it.menuId} onChange={e => updateItem(i, { menuId: e.target.value })}>
                   <option value="">— เลือกเมนู —</option>
-                  {store.menus.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {filteredMenus.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {it.menuId && !filteredMenus.find(m => m.id === it.menuId) && (() => {
+                    const m = store.menus.find(m => m.id === it.menuId);
+                    return m ? <option key={m.id} value={m.id}>{m.name}</option> : null;
+                  })()}
                 </select>
                 <div style={{ position: 'relative' }}>
                   <input type="number" className="inp" value={it.grams} onChange={e => updateItem(i, { grams: e.target.value })} placeholder="0" style={{ paddingRight: 36, fontFamily: 'Space Grotesk', textAlign: 'right' }} />
