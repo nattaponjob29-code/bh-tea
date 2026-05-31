@@ -185,9 +185,9 @@ function BranchProduce({ user, store, refresh }) {
       return toast(`กรุณากรอกล็อตของ ${ing?.name || missingLots[0].code}`, 'bad');
     }
     if (needsFreeze) {
-      if (form.freezeTemp === '' || form.freezeTemp === null) return toast('กรุณาวัดอุณหภูมิแช่แข็งของไข่มุก', 'bad');
-      const t = Number(form.freezeTemp);
-      if (!Number.isFinite(t)) return toast('อุณหภูมิไม่ถูกต้อง', 'bad');
+      if (!form.freezeTemp || !form.freezeTemp.trim()) return toast('กรุณาวัดอุณหภูมิแช่แข็งของไข่มุก', 'bad');
+      const temps = form.freezeTemp.split(',').map(s => Number(s.trim()));
+      if (temps.some(t => !Number.isFinite(t))) return toast('อุณหภูมิไม่ถูกต้อง — กรอกตัวเลข คั่นด้วย , เช่น -18, -17', 'bad');
     }
     let date = todayISO(), time = nowHM();
     if (form.timeMode === 'back') {
@@ -206,7 +206,7 @@ function BranchProduce({ user, store, refresh }) {
       qty: selected.yield, unit: selected.unit,
       status: form.status, reason: form.reason, note: form.note,
       materialLots: form.materialLots,
-      freezeTemp: needsFreeze ? Number(form.freezeTemp) : null,
+      freezeTemp: needsFreeze ? form.freezeTemp.trim() : null,
       backdated: form.timeMode === 'back',
       producer: form.producer.trim(), tester: form.tester.trim(),
       by: user.id,
@@ -274,17 +274,45 @@ function BranchProduce({ user, store, refresh }) {
               </div>
 
               {needsFreeze && (() => {
-                const t = Number(form.freezeTemp);
-                const hasVal = form.freezeTemp !== '' && form.freezeTemp !== null;
-                const isOK = hasVal && Number.isFinite(t) && t <= -18;
+                const raw = form.freezeTemp || '';
+                const hasVal = raw.trim() !== '';
+                const parts = hasVal ? raw.split(',').map(s => s.trim()) : [];
+                const parsedAll = parts.length > 0 && parts.every(s => s !== '' && Number.isFinite(Number(s)));
+                const temps = parsedAll ? parts.map(Number) : [];
+                const allOK = parsedAll && temps.every(t => t <= -18);
+                const anyAbove = parsedAll && temps.some(t => t > -18);
+                const borderColor = !hasVal ? 'var(--line-2)' : !parsedAll ? 'var(--bad)' : allOK ? 'var(--ok)' : 'var(--warn)';
+                const bgColor    = !hasVal ? 'var(--paper)' : !parsedAll ? 'rgba(192,57,43,.04)' : allOK ? 'rgba(78,124,58,.05)' : 'rgba(201,138,60,.06)';
                 return (
                   <label className="field fade-up">
                     <span>อุณหภูมิแช่แข็งไข่มุก <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(แนะนำ ≤ -18°C)</span></span>
                     <div style={{ position: 'relative' }}>
-                      <input type="number" step="0.1" className="inp" value={form.freezeTemp} onChange={e => setForm({ ...form, freezeTemp: e.target.value })} placeholder="-18.0" style={{ paddingRight: 80, fontFamily: 'Space Grotesk', borderColor: !hasVal ? 'var(--line-2)' : (isOK ? 'var(--ok)' : 'var(--warn)'), background: !hasVal ? 'var(--paper)' : (isOK ? 'rgba(78,124,58,.05)' : 'rgba(201,138,60,.06)') }} />
-                      <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>°C{hasVal && (isOK ? <Icon name="check" size={14} style={{ color: 'var(--ok)' }} /> : <Icon name="alert" size={14} style={{ color: 'var(--warn)' }} />)}</span>
+                      <input type="text" inputMode="decimal" className="inp"
+                        value={raw}
+                        onChange={e => setForm({ ...form, freezeTemp: e.target.value })}
+                        placeholder="-18.0 หรือ -18, -17"
+                        style={{ paddingRight: 80, fontFamily: 'Space Grotesk', borderColor, background: bgColor }}
+                      />
+                      <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        °C
+                        {hasVal && parsedAll && (allOK
+                          ? <Icon name="check" size={14} style={{ color: 'var(--ok)' }} />
+                          : <Icon name="alert" size={14} style={{ color: 'var(--warn)' }} />)}
+                      </span>
                     </div>
-                    {hasVal && !isOK && <div style={{ fontSize: 12, color: 'var(--warn)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="alert" size={12} />อุณหภูมิสูงกว่ามาตรฐาน — แนะนำให้แช่ที่ ≤ -18°C เพื่อคุณภาพไข่มุก</div>}
+                    {hasVal && !parsedAll && (
+                      <div style={{ fontSize: 12, color: 'var(--bad)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name="alert" size={12} />รูปแบบไม่ถูกต้อง — กรอกตัวเลข คั่นด้วย , เช่น -18, -17
+                      </div>
+                    )}
+                    {hasVal && parsedAll && anyAbove && (
+                      <div style={{ fontSize: 12, color: 'var(--warn)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name="alert" size={12} />อุณหภูมิบางถุงสูงกว่ามาตรฐาน — แนะนำให้แช่ที่ ≤ -18°C เพื่อคุณภาพไข่มุก
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: 'var(--ink-3)', marginTop: 5 }}>
+                      หากมีหลายถุง คั่นด้วยเครื่องหมาย , เช่น -18, -17
+                    </div>
                   </label>
                 );
               })()}
