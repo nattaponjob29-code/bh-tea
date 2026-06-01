@@ -51,6 +51,23 @@ function buildBomMap(rows, hasQty) {
 
 // ─── Fetch all store data ─────────────────────────────────────────────────────
 
+// PostgREST จำกัดการส่งข้อมูลสูงสุด 1,000 แถว/ครั้ง — ต้องวนดึงเป็นหน้าๆ จนครบ
+async function fetchAllRecords() {
+  const PAGE = 1000;
+  let all = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('records').select('*')
+      .order('date', { ascending: false })
+      .order('time', { ascending: false })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(error.message);
+    all = all.concat(data || []);
+    if (!data || data.length < PAGE) break;
+  }
+  return all;
+}
+
 export async function fetchStore() {
   const [
     { data: branches, error: e1 },
@@ -59,7 +76,7 @@ export async function fetchStore() {
     { data: bomProdRows, error: e4 },
     { data: bomDefectRows, error: e5 },
     { data: profiles, error: e6 },
-    { data: records, error: e7 },
+    records,
   ] = await Promise.all([
     supabase.from('branches').select('*').order('id'),
     supabase.from('menus').select('*').order('id'),
@@ -67,10 +84,10 @@ export async function fetchStore() {
     supabase.from('bom_prod').select('*'),
     supabase.from('bom_defect').select('*'),
     supabase.from('profiles').select('*').order('username'),
-    supabase.from('records').select('*').order('date', { ascending: false }).order('time', { ascending: false }).limit(10000),
+    fetchAllRecords(),
   ]);
 
-  const errors = [e1, e2, e3, e4, e5, e6, e7].filter(Boolean);
+  const errors = [e1, e2, e3, e4, e5, e6].filter(Boolean);
   if (errors.length) throw new Error(errors[0].message);
 
   return {
