@@ -66,7 +66,7 @@ create table if not exists records (
   reason              text,
   material_lots       jsonb,            -- { [ingredient_code]: "lot-number" }
   material_breakdown  jsonb,
-  freeze_temp         numeric,
+  freeze_temp         text,             -- เก็บได้หลายค่าคั่น , เช่น "-18, -17" (หลายถุง)
   backdated           boolean default false,
   producer            text,
   tester              text,

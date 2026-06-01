@@ -62,3 +62,10 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ============================================================
+-- FIX 5: records.freeze_temp → text  (แก้ error "invalid input syntax for type numeric")
+-- ไข่มุกโมจิที่ทำหลายถุงเก็บค่าหลายอุณหภูมิคั่นด้วย , เช่น "-18, -17"
+-- จึงต้องเป็น text ไม่ใช่ numeric
+-- ============================================================
+alter table records alter column freeze_temp type text using freeze_temp::text;
