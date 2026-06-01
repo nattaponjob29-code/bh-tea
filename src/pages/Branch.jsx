@@ -300,6 +300,25 @@ function BranchProduce({ user, store, refresh }) {
                           : <Icon name="alert" size={14} style={{ color: 'var(--warn)' }} />)}
                       </span>
                     </div>
+                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                      <button type="button"
+                        onClick={() => setForm({ ...form, freezeTemp: raw + '-' })}
+                        style={{ flex: '0 0 auto', padding: '7px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'Space Grotesk', fontSize: 16, fontWeight: 600, background: 'var(--paper)', color: 'var(--ink)', border: '1px solid var(--line-2)', lineHeight: 1 }}>
+                        −
+                      </button>
+                      <button type="button"
+                        onClick={() => setForm({ ...form, freezeTemp: (raw.trim() === '' ? '-' : raw + ', -') })}
+                        style={{ flex: 1, padding: '7px 12px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 500, background: 'var(--paper)', color: 'var(--ink)', border: '1px solid var(--line-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                        <Icon name="plus" size={13} /> เพิ่มถุง
+                      </button>
+                      {hasVal && (
+                        <button type="button"
+                          onClick={() => setForm({ ...form, freezeTemp: '' })}
+                          style={{ flex: '0 0 auto', padding: '7px 14px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 500, background: 'var(--paper)', color: 'var(--ink-3)', border: '1px solid var(--line-2)' }}>
+                          ล้าง
+                        </button>
+                      )}
+                    </div>
                     {hasVal && !parsedAll && (
                       <div style={{ fontSize: 12, color: 'var(--bad)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Icon name="alert" size={12} />รูปแบบไม่ถูกต้อง — กรอกตัวเลข คั่นด้วย , เช่น -18, -17
