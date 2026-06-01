@@ -186,8 +186,6 @@ function BranchProduce({ user, store, refresh }) {
     }
     if (needsFreeze) {
       if (!form.freezeTemp || !form.freezeTemp.trim()) return toast('กรุณาวัดอุณหภูมิแช่แข็งของไข่มุก', 'bad');
-      const temps = form.freezeTemp.split(',').map(s => Number(s.trim()));
-      if (temps.some(t => !Number.isFinite(t))) return toast('อุณหภูมิไม่ถูกต้อง — กรอกตัวเลข คั่นด้วย , เช่น -18, -17', 'bad');
     }
     let date = todayISO(), time = nowHM();
     if (form.timeMode === 'back') {
@@ -276,55 +274,24 @@ function BranchProduce({ user, store, refresh }) {
               {needsFreeze && (() => {
                 const raw = form.freezeTemp || '';
                 const hasVal = raw.trim() !== '';
-                const parts = hasVal ? raw.split(',').map(s => s.trim()) : [];
-                const parsedAll = parts.length > 0 && parts.every(s => s !== '' && Number.isFinite(Number(s)));
-                const temps = parsedAll ? parts.map(Number) : [];
-                const allOK = parsedAll && temps.every(t => t <= -18);
-                const anyAbove = parsedAll && temps.some(t => t > -18);
-                const borderColor = !hasVal ? 'var(--line-2)' : !parsedAll ? 'var(--bad)' : allOK ? 'var(--ok)' : 'var(--warn)';
-                const bgColor    = !hasVal ? 'var(--paper)' : !parsedAll ? 'rgba(192,57,43,.04)' : allOK ? 'rgba(78,124,58,.05)' : 'rgba(201,138,60,.06)';
+                const parts = hasVal ? raw.split(',').map(s => s.trim()).filter(s => s !== '') : [];
+                const nums = parts.map(Number).filter(n => Number.isFinite(n));
+                const anyAbove = nums.length > 0 && nums.some(t => t > -18);
                 return (
                   <label className="field fade-up">
                     <span>อุณหภูมิแช่แข็งไข่มุก <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>(แนะนำ ≤ -18°C)</span></span>
                     <div style={{ position: 'relative' }}>
-                      <input type="text" inputMode="decimal" className="inp"
+                      <input type="text" className="inp"
                         value={raw}
                         onChange={e => setForm({ ...form, freezeTemp: e.target.value })}
                         placeholder="-18.0 หรือ -18, -17"
-                        style={{ paddingRight: 80, fontFamily: 'Space Grotesk', borderColor, background: bgColor }}
+                        style={{ paddingRight: 44, borderColor: anyAbove ? 'var(--warn)' : 'var(--line-2)' }}
                       />
-                      <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-3)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--ink-3)' }}>
                         °C
-                        {hasVal && parsedAll && (allOK
-                          ? <Icon name="check" size={14} style={{ color: 'var(--ok)' }} />
-                          : <Icon name="alert" size={14} style={{ color: 'var(--warn)' }} />)}
                       </span>
                     </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                      <button type="button"
-                        onClick={() => setForm({ ...form, freezeTemp: raw + '-' })}
-                        style={{ flex: '0 0 auto', padding: '7px 16px', borderRadius: 9, cursor: 'pointer', fontFamily: 'Space Grotesk', fontSize: 16, fontWeight: 600, background: 'var(--paper)', color: 'var(--ink)', border: '1px solid var(--line-2)', lineHeight: 1 }}>
-                        −
-                      </button>
-                      <button type="button"
-                        onClick={() => setForm({ ...form, freezeTemp: (raw.trim() === '' ? '-' : raw + ', -') })}
-                        style={{ flex: 1, padding: '7px 12px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 500, background: 'var(--paper)', color: 'var(--ink)', border: '1px solid var(--line-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                        <Icon name="plus" size={13} /> เพิ่มถุง
-                      </button>
-                      {hasVal && (
-                        <button type="button"
-                          onClick={() => setForm({ ...form, freezeTemp: '' })}
-                          style={{ flex: '0 0 auto', padding: '7px 14px', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 500, background: 'var(--paper)', color: 'var(--ink-3)', border: '1px solid var(--line-2)' }}>
-                          ล้าง
-                        </button>
-                      )}
-                    </div>
-                    {hasVal && !parsedAll && (
-                      <div style={{ fontSize: 12, color: 'var(--bad)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Icon name="alert" size={12} />รูปแบบไม่ถูกต้อง — กรอกตัวเลข คั่นด้วย , เช่น -18, -17
-                      </div>
-                    )}
-                    {hasVal && parsedAll && anyAbove && (
+                    {anyAbove && (
                       <div style={{ fontSize: 12, color: 'var(--warn)', marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Icon name="alert" size={12} />อุณหภูมิบางถุงสูงกว่ามาตรฐาน — แนะนำให้แช่ที่ ≤ -18°C เพื่อคุณภาพไข่มุก
                       </div>
