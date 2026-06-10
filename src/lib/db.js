@@ -51,19 +51,30 @@ function buildBomMap(rows, hasQty) {
 
 // ─── Fetch all store data ─────────────────────────────────────────────────────
 
-// PostgREST จำกัดการส่งข้อมูลสูงสุด 1,000 แถว/ครั้ง — ต้องวนดึงเป็นหน้าๆ จนครบ
+// PostgREST จำกัดการส่งข้อมูลสูงสุด 1,000 แถว/ครั้ง
+// ดึงจำนวนทั้งหมดก่อน แล้วยิงทุกหน้า "พร้อมกัน" (parallel) ให้เร็วที่สุด
 async function fetchAllRecords() {
   const PAGE = 1000;
-  let all = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase
-      .from('records').select('*')
-      .order('date', { ascending: false })
-      .order('time', { ascending: false })
-      .range(from, from + PAGE - 1);
+  const { count, error: cErr } = await supabase
+    .from('records').select('id', { count: 'exact', head: true });
+  if (cErr) throw new Error(cErr.message);
+
+  const pages = Math.max(1, Math.ceil((count || 0) / PAGE));
+  const reqs = [];
+  for (let i = 0; i < pages; i++) {
+    reqs.push(
+      supabase.from('records').select('*')
+        .order('date', { ascending: false })
+        .order('time', { ascending: false })
+        .order('id', { ascending: false })   // tiebreaker — แบ่งหน้าให้เสถียร ไม่ซ้ำ/ตกหล่น
+        .range(i * PAGE, i * PAGE + PAGE - 1)
+    );
+  }
+  const results = await Promise.all(reqs);
+  const all = [];
+  for (const { data, error } of results) {
     if (error) throw new Error(error.message);
-    all = all.concat(data || []);
-    if (!data || data.length < PAGE) break;
+    if (data) all.push(...data);
   }
   return all;
 }
