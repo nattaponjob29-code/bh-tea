@@ -1,7 +1,7 @@
 import { useState, useEffect, Component } from 'react';
 import { supabase } from './lib/supabase.js';
 import { ROLE_DEFS } from './lib/constants.js';
-import { StoreProvider, useStore } from './context/StoreContext.jsx';
+import { StoreProvider, useStore, clearStoreCache } from './context/StoreContext.jsx';
 import { LoginScreen } from './pages/Login.jsx';
 import { BranchView } from './pages/Branch.jsx';
 import { AreaView } from './pages/Area.jsx';
@@ -49,6 +49,7 @@ function AppInner() {
   }, [refresh]);
 
   const onLogout = async () => {
+    clearStoreCache();
     await supabase.auth.signOut();
   };
 
