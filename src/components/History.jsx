@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
 import { Icon, SearchBox, Empty, Modal, useToast } from './ui.jsx';
 import { fmtDateTH, fmtNum, todayISO, csvCell } from '../lib/helpers.js';
 import { deleteRecord, deleteRecords } from '../lib/db.js';
+import { useStore } from '../context/StoreContext.jsx';
 
 export function DateQuickPresets({ setFrom, setTo, compact = false }) {
   const [open, setOpen] = useState(false);
@@ -181,6 +182,7 @@ export function exportRecordsCSV(records, store, mode) {
 
 export function HistoryView({ records, store, sectionTitle, sectionIcon = 'history', mode = 'all', showBranch = true, showBranchFilter = false, refresh, title, eyebrow, branches }) {
   const toast = useToast();
+  const { removeRecords } = useStore();
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [from, setFrom] = useState(() => todayISO());
@@ -237,7 +239,7 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
     setDeleting(true);
     try {
       await deleteRecord(rec.id);
-      refresh && await refresh();
+      removeRecords(rec.id);
       toast(`ลบ ${rec.id} แล้ว`, 'ok');
       setDeleteTarget(null);
     } catch (e) {
@@ -250,8 +252,9 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
   const onDeleteAll = async () => {
     setDeleting(true);
     try {
-      await deleteRecords(filtered.map(r => r.id));
-      refresh && await refresh();
+      const ids = filtered.map(r => r.id);
+      await deleteRecords(ids);
+      removeRecords(ids);
       toast(`ลบ ${filtered.length} รายการแล้ว`, 'ok');
       setDeleteAllOpen(false);
     } catch (e) {

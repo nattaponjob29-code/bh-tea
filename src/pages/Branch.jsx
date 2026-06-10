@@ -4,6 +4,7 @@ import { HistoryView, DefectHistoryPage } from '../components/History.jsx';
 import { todayISO, nowHM, fmtDateTH, fmtNum, greetingTH } from '../lib/helpers.js';
 import { DEFECT_REASONS, FAIL_REASONS } from '../lib/constants.js';
 import { insertRecord, insertRecords } from '../lib/db.js';
+import { useStore } from '../context/StoreContext.jsx';
 
 export function BranchView({ user, store, refresh, onLogout }) {
   const [page, setPage] = useState('home');
@@ -153,6 +154,7 @@ function Row({ label, value }) {
 
 function BranchProduce({ user, store, refresh }) {
   const toast = useToast();
+  const { addRecords } = useStore();
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -212,7 +214,7 @@ function BranchProduce({ user, store, refresh }) {
     setSaving(true);
     try {
       await insertRecord(rec);
-      await refresh();
+      addRecords(rec);
       toast(`บันทึก ${rec.id} สำเร็จ`, 'ok');
       setSelected(null); setForm(emptyForm()); setConfirmOpen(false);
     } catch (e) {
@@ -415,6 +417,7 @@ function BranchProduce({ user, store, refresh }) {
 
 function BranchDefect({ user, store, refresh }) {
   const toast = useToast();
+  const { addRecords } = useStore();
   const [items, setItems] = useState([{ menuId: '', grams: '' }]);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
@@ -455,7 +458,7 @@ function BranchDefect({ user, store, refresh }) {
     setSaving(true);
     try {
       await insertRecords(newRecs);
-      await refresh();
+      addRecords(newRecs);
       toast(`บันทึกของเสีย ${newRecs.length} รายการ`, 'warn');
       setItems([{ menuId: '', grams: '' }]); setReason(''); setNote('');
     } catch (e) {

@@ -31,12 +31,33 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
+  // อัปเดตเฉพาะในเครื่อง ไม่ต้องดึงทั้งตารางใหม่ — ลด Disk IO ตอนบันทึก/ลบ
+  const addRecords = useCallback((recs) => {
+    const list = (Array.isArray(recs) ? recs : [recs]).map(r => ({ materialBreakdown: [], ...r }));
+    setStore(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, records: [...list, ...prev.records] };
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+  }, []);
+
+  const removeRecords = useCallback((ids) => {
+    const idSet = new Set(Array.isArray(ids) ? ids : [ids]);
+    setStore(prev => {
+      if (!prev) return prev;
+      const next = { ...prev, records: prev.records.filter(r => !idSet.has(r.id)) };
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(next)); } catch { /* quota */ }
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     refresh().finally(() => setLoading(false));
   }, [refresh]);
 
   return (
-    <StoreCtx.Provider value={{ store, loading, error, refresh }}>
+    <StoreCtx.Provider value={{ store, loading, error, refresh, addRecords, removeRecords }}>
       {children}
     </StoreCtx.Provider>
   );

@@ -52,29 +52,33 @@ function buildBomMap(rows, hasQty) {
 // ─── Fetch all store data ─────────────────────────────────────────────────────
 
 // PostgREST จำกัดการส่งข้อมูลสูงสุด 1,000 แถว/ครั้ง
-// ดึงจำนวนทั้งหมดก่อน แล้วยิงทุกหน้า "พร้อมกัน" (parallel) ให้เร็วที่สุด
+// ดึงหน้าแรกพร้อมจำนวนรวม แล้วถ้ามีมากกว่านั้นค่อยยิงหน้าที่เหลือ "พร้อมกัน" (parallel)
+const orderedRecords = () => supabase.from('records').select('*')
+  .order('date', { ascending: false })
+  .order('time', { ascending: false })
+  .order('id', { ascending: false });   // tiebreaker — แบ่งหน้าให้เสถียร ไม่ซ้ำ/ตกหล่น
+
 async function fetchAllRecords() {
   const PAGE = 1000;
-  const { count, error: cErr } = await supabase
-    .from('records').select('id', { count: 'exact', head: true });
-  if (cErr) throw new Error(cErr.message);
+  const first = await supabase.from('records').select('*', { count: 'exact' })
+    .order('date', { ascending: false })
+    .order('time', { ascending: false })
+    .order('id', { ascending: false })
+    .range(0, PAGE - 1);
+  if (first.error) throw new Error(first.error.message);
 
-  const pages = Math.max(1, Math.ceil((count || 0) / PAGE));
-  const reqs = [];
-  for (let i = 0; i < pages; i++) {
-    reqs.push(
-      supabase.from('records').select('*')
-        .order('date', { ascending: false })
-        .order('time', { ascending: false })
-        .order('id', { ascending: false })   // tiebreaker — แบ่งหน้าให้เสถียร ไม่ซ้ำ/ตกหล่น
-        .range(i * PAGE, i * PAGE + PAGE - 1)
-    );
-  }
-  const results = await Promise.all(reqs);
-  const all = [];
-  for (const { data, error } of results) {
-    if (error) throw new Error(error.message);
-    if (data) all.push(...data);
+  let all = first.data || [];
+  const total = first.count ?? all.length;
+  if (total > PAGE) {
+    const reqs = [];
+    for (let from = PAGE; from < total; from += PAGE) {
+      reqs.push(orderedRecords().range(from, from + PAGE - 1));
+    }
+    const results = await Promise.all(reqs);
+    for (const { data, error } of results) {
+      if (error) throw new Error(error.message);
+      if (data) all = all.concat(data);
+    }
   }
   return all;
 }

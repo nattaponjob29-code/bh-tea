@@ -69,3 +69,12 @@ create trigger on_auth_user_created
 -- จึงต้องเป็น text ไม่ใช่ numeric
 -- ============================================================
 alter table records alter column freeze_temp type text using freeze_temp::text;
+
+-- ============================================================
+-- FIX 6: Index ช่วยให้การดึงประวัติ (เรียงตามวันที่/เวลา) ใช้ดิสก์น้อยลง
+-- ลดปัญหา Disk IO budget ตอนโหลดข้อมูล
+-- ============================================================
+create index if not exists records_date_time_id_idx
+  on records (date desc, time desc, id desc);
+create index if not exists records_branch_idx
+  on records (branch_id);
