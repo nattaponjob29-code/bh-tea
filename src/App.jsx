@@ -35,6 +35,7 @@ class ErrorBoundary extends Component {
 function AppInner() {
   const [session, setSession] = useState(undefined);
   const { store, loading: storeLoading, refresh } = useStore();
+  const [slow, setSlow] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -48,6 +49,13 @@ function AppInner() {
     return () => subscription.unsubscribe();
   }, [refresh]);
 
+  // ถ้าโหลดนานเกิน 20 วิ ให้แจ้งผู้ใช้แทนการค้างเงียบๆ
+  useEffect(() => {
+    if (!(session && storeLoading)) { setSlow(false); return; }
+    const t = setTimeout(() => setSlow(true), 20000);
+    return () => clearTimeout(t);
+  }, [session, storeLoading]);
+
   const onLogout = async () => {
     clearStoreCache();
     await supabase.auth.signOut();
@@ -55,8 +63,21 @@ function AppInner() {
 
   if (session === undefined || (session && storeLoading)) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', fontSize: 16, color: 'var(--ink-3)' }}>
-        กำลังโหลด...
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 14, padding: 24, textAlign: 'center', color: 'var(--ink-3)' }}>
+        <div style={{ fontSize: 16 }}>กำลังโหลด...</div>
+        {slow && (
+          <>
+            <div style={{ fontSize: 14, color: 'var(--ink-2)', maxWidth: 420, lineHeight: 1.6 }}>
+              เซิร์ฟเวอร์ตอบสนองช้าผิดปกติ — อาจกำลังมีโหลดสูงหรือฐานข้อมูลกำลังกู้คืน
+              ลองรอสักครู่ หรือกดลองใหม่
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              style={{ padding: '10px 24px', borderRadius: 10, background: 'var(--ink)', color: '#fffdf7', border: 'none', cursor: 'pointer', fontSize: 14, fontWeight: 500 }}>
+              ลองใหม่
+            </button>
+          </>
+        )}
       </div>
     );
   }
