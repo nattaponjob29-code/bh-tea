@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { supabase } from '../lib/supabase.js';
 import { AppShell, PageHeader, StatCard, Icon, Empty, Bars, SearchBox, useToast, Modal } from '../components/ui.jsx';
 import { SplitHistoryPage, DefectHistoryPage } from '../components/History.jsx';
@@ -6,6 +6,7 @@ import { DefectMaterialDashboard } from './Area.jsx';
 import {
   saveBranch, deleteBranch, saveMenu, deleteMenu,
   saveIngredient, deleteIngredient, saveBomProd, saveBomDefect, updateProfile,
+  fetchRecordStats,
 } from '../lib/db.js';
 import { ROLE_OPTIONS, ROLE_TH, ROLE_COLOR } from '../lib/constants.js';
 import { todayISO, fmtNum } from '../lib/helpers.js';
@@ -42,9 +43,16 @@ function SysRow({ label, value, ok }) {
 function AdminOverview({ store, refresh }) {
   const prod = store.records.filter(r => r.type === 'production');
   const defects = store.records.filter(r => r.type === 'defect');
-  const passed = prod.filter(r => r.status === 'passed').length;
-  const passRate = prod.length ? Math.round(passed / prod.length * 100) : 0;
   const menusWithBom = Object.keys(store.bomProd || {}).filter(k => (store.bomProd[k] || []).length > 0).length;
+
+  // นับยอดรวมทั้งหมดจาก DB (egress ~0) — แอปโหลดมาแค่ข้อมูลล่าสุด store.records จึงไม่ใช่ยอดรวม
+  const [stats, setStats] = useState(null);
+  useEffect(() => { fetchRecordStats().then(setStats).catch(() => {}); }, []);
+  const totalProd = stats?.production ?? prod.length;
+  const totalRecords = stats?.total ?? store.records.length;
+  const passRate = stats
+    ? (stats.production ? Math.round(stats.passedProduction / stats.production * 100) : 0)
+    : (prod.length ? Math.round(prod.filter(r => r.status === 'passed').length / prod.length * 100) : 0);
 
   const trend = useMemo(() => {
     return Array.from({ length: 14 }, (_, i) => {
@@ -71,7 +79,7 @@ function AdminOverview({ store, refresh }) {
         <StatCard label="สาขา"       value={store.branches.length}   sub="ที่เปิดใช้งาน"       icon="store"   accent="var(--amber)" />
         <StatCard label="เมนู"       value={store.menus.length}      sub={`${menusWithBom}/${store.menus.length} มี BOM`} icon="menu" accent="var(--matcha)" />
         <StatCard label="ผู้ใช้งาน"  value={store.users.length}      sub={ROLE_OPTIONS.map(r => store.users.filter(u => u.role === r).length).join(' · ')} icon="user" accent="var(--info)" />
-        <StatCard label="ล็อตผลิตรวม" value={fmtNum(prod.length)}    sub={`${passRate}% pass`}  icon="factory" accent="var(--tea)" trend={trend} />
+        <StatCard label="ล็อตผลิตรวม" value={fmtNum(totalProd)}    sub={`${passRate}% pass`}  icon="factory" accent="var(--tea)" trend={trend} />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 22 }}>
@@ -87,7 +95,7 @@ function AdminOverview({ store, refresh }) {
           <h3 className="font-display" style={{ margin: '0 0 16px', fontSize: 18, fontWeight: 600 }}>สถานะระบบ</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             <SysRow label="Database"     value="Supabase · PostgreSQL" ok />
-            <SysRow label="Records"      value={`${store.records.length} entries`} ok />
+            <SysRow label="Records"      value={`${totalRecords} entries`} ok />
             <SysRow label="Users"        value={`${store.users.length} คน`} ok />
             <SysRow label="BOM coverage" value={`${menusWithBom}/${store.menus.length} เมนู`} ok={menusWithBom === store.menus.length} />
           </div>

@@ -49,22 +49,32 @@ function buildBomMap(rows, hasQty) {
   return map;
 }
 
-// ─── Fetch all store data ─────────────────────────────────────────────────────
+// ─── Fetch records (paged + windowed) ─────────────────────────────────────────
+
+// วันที่ย้อนหลัง n วัน → 'YYYY-MM-DD' (ใช้กำหนดหน้าต่างข้อมูลล่าสุด)
+function daysAgoISO(n) {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+// สร้าง query records พร้อมกรองช่วงวันที่ + เรียงเสถียร (tiebreaker = id)
+// since = เอาตั้งแต่วันนี้ (date >= since), before = เอาก่อนวันนี้ (date < before)
+function recordsQuery(withCount, { since, before } = {}) {
+  let q = supabase.from('records').select('*', withCount ? { count: 'exact' } : undefined);
+  if (since)  q = q.gte('date', since);
+  if (before) q = q.lt('date', before);
+  return q
+    .order('date', { ascending: false })
+    .order('time', { ascending: false })
+    .order('id', { ascending: false });
+}
 
 // PostgREST จำกัดการส่งข้อมูลสูงสุด 1,000 แถว/ครั้ง
 // ดึงหน้าแรกพร้อมจำนวนรวม แล้วถ้ามีมากกว่านั้นค่อยยิงหน้าที่เหลือ "พร้อมกัน" (parallel)
-const orderedRecords = () => supabase.from('records').select('*')
-  .order('date', { ascending: false })
-  .order('time', { ascending: false })
-  .order('id', { ascending: false });   // tiebreaker — แบ่งหน้าให้เสถียร ไม่ซ้ำ/ตกหล่น
-
-async function fetchAllRecords() {
+async function fetchRecordsPaged(opts = {}) {
   const PAGE = 1000;
-  const first = await supabase.from('records').select('*', { count: 'exact' })
-    .order('date', { ascending: false })
-    .order('time', { ascending: false })
-    .order('id', { ascending: false })
-    .range(0, PAGE - 1);
+  const first = await recordsQuery(true, opts).range(0, PAGE - 1);
   if (first.error) throw new Error(first.error.message);
 
   let all = first.data || [];
@@ -72,7 +82,7 @@ async function fetchAllRecords() {
   if (total > PAGE) {
     const reqs = [];
     for (let from = PAGE; from < total; from += PAGE) {
-      reqs.push(orderedRecords().range(from, from + PAGE - 1));
+      reqs.push(recordsQuery(false, opts).range(from, from + PAGE - 1));
     }
     const results = await Promise.all(reqs);
     for (const { data, error } of results) {
@@ -83,7 +93,19 @@ async function fetchAllRecords() {
   return all;
 }
 
-export async function fetchStore() {
+// ดึงประวัติเก่าตามช่วงวันที่ (ใช้ตอนผู้ใช้เลือกดูย้อนหลังเกินหน้าต่างเริ่มต้น)
+// since = null → เอาทุกอย่างก่อน before (โหลดทั้งหมดที่เหลือ)
+export async function fetchRecordsRange(since, before) {
+  const rows = await fetchRecordsPaged({ since: since || undefined, before });
+  return rows.map(fromRecord);
+}
+
+// ─── Fetch all store data ─────────────────────────────────────────────────────
+
+// โหลดเฉพาะข้อมูลล่าสุด (ค่าเริ่มต้น 60 วัน) ตอนเปิดแอป — ลด egress/disk IO
+// sinceDays = null → โหลดประวัติทั้งหมด
+export async function fetchStore({ sinceDays = 60 } = {}) {
+  const since = sinceDays ? daysAgoISO(sinceDays) : null;
   const [
     { data: branches, error: e1 },
     { data: menus, error: e2 },
@@ -99,7 +121,7 @@ export async function fetchStore() {
     supabase.from('bom_prod').select('*'),
     supabase.from('bom_defect').select('*'),
     supabase.from('profiles').select('*').order('username'),
-    fetchAllRecords(),
+    fetchRecordsPaged(since ? { since } : {}),
   ]);
 
   const errors = [e1, e2, e3, e4, e5, e6].filter(Boolean);
@@ -116,6 +138,26 @@ export async function fetchStore() {
       branchId: p.branch_id || '', areas: p.areas || [], label: p.label || '',
     })),
     records: (records || []).map(fromRecord),
+    // วันที่เก่าสุดที่ "มีข้อมูลครบ" ในเครื่อง — null = โหลดครบทั้งหมดแล้ว
+    recordsSince: since,
+  };
+}
+
+// นับจำนวน records ทั้งหมด (ไม่ดึงข้อมูลแถว — egress ~0) สำหรับสถิติรวมของ Admin
+export async function fetchRecordStats() {
+  const countOnly = () => supabase.from('records').select('id', { count: 'exact', head: true });
+  const [tot, prod, passed] = await Promise.all([
+    countOnly(),
+    countOnly().eq('type', 'production'),
+    countOnly().eq('type', 'production').eq('status', 'passed'),
+  ]);
+  if (tot.error || prod.error || passed.error) {
+    throw new Error((tot.error || prod.error || passed.error).message);
+  }
+  return {
+    total: tot.count ?? 0,
+    production: prod.count ?? 0,
+    passedProduction: passed.count ?? 0,
   };
 }
 

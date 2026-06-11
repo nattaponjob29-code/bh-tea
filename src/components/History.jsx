@@ -182,7 +182,7 @@ export function exportRecordsCSV(records, store, mode) {
 
 export function HistoryView({ records, store, sectionTitle, sectionIcon = 'history', mode = 'all', showBranch = true, showBranchFilter = false, refresh, title, eyebrow, branches }) {
   const toast = useToast();
-  const { removeRecords } = useStore();
+  const { removeRecords, loadRecordsSince, loadingMore } = useStore();
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [from, setFrom] = useState(() => todayISO());
@@ -201,6 +201,15 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
   }, []);
 
   const branchList = branches || store.branches;
+
+  // ถ้าผู้ใช้เลือกช่วงวันที่ย้อนหลังเกินหน้าต่างที่โหลดไว้ → โหลดประวัติเก่าเพิ่มตามต้องการ
+  // from === '' (ทั้งหมด) → โหลดประวัติทั้งหมด
+  useEffect(() => {
+    if (!loadRecordsSince) return;
+    const since = store.recordsSince;
+    if (!since) return; // โหลดครบทั้งหมดแล้ว
+    if (from === '' || from < since) loadRecordsSince(from || null);
+  }, [from, store.recordsSince, loadRecordsSince]);
 
   const scopedRecords = useMemo(() => {
     if (mode === 'production') return records.filter(r => r.type === 'production');
@@ -366,6 +375,13 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
           <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
           <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
           <DateQuickPresets setFrom={setFrom} setTo={setTo} />
+        </div>
+      )}
+
+      {loadingMore && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 12, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 13, color: 'var(--ink-3)' }}>
+          <span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--line-2)', borderTopColor: 'var(--ink-3)', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+          กำลังโหลดประวัติเก่าเพิ่ม...
         </div>
       )}
 
@@ -650,6 +666,7 @@ export function SplitHistoryPage({ records, store, title, eyebrow, showBranch, s
 
 export function DefectByMaterial({ records, store, showBranchFilter, branches }) {
   const toast = useToast();
+  const { loadRecordsSince, loadingMore } = useStore();
   const [q, setQ] = useState('');
   const [from, setFrom] = useState(() => todayISO());
   const [to, setTo] = useState(() => todayISO());
@@ -662,6 +679,14 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
+
+  // โหลดประวัติเก่าเพิ่มเมื่อเลือกช่วงวันที่ย้อนหลังเกินหน้าต่างที่โหลดไว้
+  useEffect(() => {
+    if (!loadRecordsSince) return;
+    const since = store.recordsSince;
+    if (!since) return;
+    if (from === '' || from < since) loadRecordsSince(from || null);
+  }, [from, store.recordsSince, loadRecordsSince]);
 
   const filteredRecs = useMemo(() => records.filter(r => {
     if (from && r.date < from) return false;
@@ -753,6 +778,13 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
           <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} />
           <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} />
           <DateQuickPresets setFrom={setFrom} setTo={setTo} />
+        </div>
+      )}
+
+      {loadingMore && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 12, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 13, color: 'var(--ink-3)' }}>
+          <span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--line-2)', borderTopColor: 'var(--ink-3)', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
+          กำลังโหลดประวัติเก่าเพิ่ม...
         </div>
       )}
 
