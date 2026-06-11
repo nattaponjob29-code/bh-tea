@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AppShell, PageHeader, StatCard, Icon, Empty, useIsMobile } from '../components/ui.jsx';
 import { SplitHistoryPage, DefectHistoryPage } from '../components/History.jsx';
 import { DateRangePicker, StackedBars, Legend } from './Area.jsx';
+import { useEnsureRecordsLoaded } from '../context/StoreContext.jsx';
 import { todayISO, fmtDateTH, fmtNum } from '../lib/helpers.js';
 
 function RankList({ items, positive }) {
@@ -44,6 +45,7 @@ function QCOverview({ store }) {
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
+  useEnsureRecordsLoaded(from);
 
   const inRange = store.records.filter(r => r.date >= from && r.date <= to);
   const prod = inRange.filter(r => r.type === 'production');
@@ -163,6 +165,7 @@ function QCBranches({ store }) {
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 13); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
+  useEnsureRecordsLoaded(from);
   const inRange = store.records.filter(r => r.date >= from && r.date <= to);
 
   return (
@@ -217,6 +220,7 @@ function QCMenus({ store }) {
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 13); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
+  useEnsureRecordsLoaded(from);
   const inRange = store.records.filter(r => r.date >= from && r.date <= to);
 
   const rows = store.menus.map(m => {

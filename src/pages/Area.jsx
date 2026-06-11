@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { AppShell, PageHeader, StatCard, Icon, Empty, Donut, InteractiveDonut, useIsMobile } from '../components/ui.jsx';
 import { SplitHistoryPage, DefectHistoryPage } from '../components/History.jsx';
+import { useEnsureRecordsLoaded } from '../context/StoreContext.jsx';
 import { todayISO, fmtDateTH, fmtNum } from '../lib/helpers.js';
 
 /* ---------- Date range picker ---------- */
@@ -201,6 +202,7 @@ function AreaDashboard({ user, myBranches, records, store }) {
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
+  useEnsureRecordsLoaded(from);
 
   const inRange = records.filter(r => r.date >= from && r.date <= to);
   const prod = inRange.filter(r => r.type === 'production');
@@ -345,6 +347,7 @@ function AreaBranches({ myBranches, records }) {
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
+  useEnsureRecordsLoaded(from);
   const inRange = records.filter(r => r.date >= from && r.date <= to);
 
   return (

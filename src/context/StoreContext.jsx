@@ -111,3 +111,16 @@ export function StoreProvider({ children }) {
 }
 
 export const useStore = () => useContext(StoreCtx);
+
+// ให้ component มั่นใจว่ามีข้อมูลย้อนถึงวันที่ `from` แล้ว — ถ้ายังไม่มีจะโหลดเพิ่มให้
+// ใช้ในแดชบอร์ด/หน้าประวัติที่เลือกช่วงวันที่ย้อนหลังเกินหน้าต่างที่โหลดไว้
+// from === '' หรือ null → โหลดประวัติทั้งหมด
+export function useEnsureRecordsLoaded(from) {
+  const ctx = useContext(StoreCtx);
+  const loadRecordsSince = ctx?.loadRecordsSince;
+  const since = ctx?.store?.recordsSince;
+  useEffect(() => {
+    if (!loadRecordsSince || !since) return;
+    if (from === '' || from == null || from < since) loadRecordsSince(from || null);
+  }, [from, since, loadRecordsSince]);
+}

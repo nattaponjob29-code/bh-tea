@@ -102,9 +102,9 @@ export async function fetchRecordsRange(since, before) {
 
 // ─── Fetch all store data ─────────────────────────────────────────────────────
 
-// โหลดเฉพาะข้อมูลล่าสุด (ค่าเริ่มต้น 60 วัน) ตอนเปิดแอป — ลด egress/disk IO
+// โหลดเฉพาะข้อมูลล่าสุด (ค่าเริ่มต้น 7 วัน) ตอนเปิดแอป — ลด egress/disk IO
 // sinceDays = null → โหลดประวัติทั้งหมด
-export async function fetchStore({ sinceDays = 60 } = {}) {
+export async function fetchStore({ sinceDays = 7 } = {}) {
   const since = sinceDays ? daysAgoISO(sinceDays) : null;
   const [
     { data: branches, error: e1 },

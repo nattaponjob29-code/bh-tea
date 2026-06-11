@@ -8,6 +8,7 @@ import {
   saveIngredient, deleteIngredient, saveBomProd, saveBomDefect, updateProfile,
   fetchRecordStats,
 } from '../lib/db.js';
+import { useEnsureRecordsLoaded } from '../context/StoreContext.jsx';
 import { ROLE_OPTIONS, ROLE_TH, ROLE_COLOR } from '../lib/constants.js';
 import { todayISO, fmtNum } from '../lib/helpers.js';
 
@@ -44,6 +45,10 @@ function AdminOverview({ store, refresh }) {
   const prod = store.records.filter(r => r.type === 'production');
   const defects = store.records.filter(r => r.type === 'defect');
   const menusWithBom = Object.keys(store.bomProd || {}).filter(k => (store.bomProd[k] || []).length > 0).length;
+
+  // กราฟผลิต 14 วัน → ต้องมั่นใจว่ามีข้อมูลย้อนหลังครบ 14 วัน (โหลดเพิ่มถ้าหน้าต่างเริ่มต้นสั้นกว่า)
+  const trendFrom = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 13); return d.toISOString().slice(0, 10); }, []);
+  useEnsureRecordsLoaded(trendFrom);
 
   // นับยอดรวมทั้งหมดจาก DB (egress ~0) — แอปโหลดมาแค่ข้อมูลล่าสุด store.records จึงไม่ใช่ยอดรวม
   const [stats, setStats] = useState(null);
