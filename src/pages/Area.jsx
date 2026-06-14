@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { AppShell, PageHeader, StatCard, Icon, Empty, Donut, InteractiveDonut, useIsMobile } from '../components/ui.jsx';
 import { SplitHistoryPage, DefectHistoryPage } from '../components/History.jsx';
-import { useEnsureRecordsLoaded } from '../context/StoreContext.jsx';
+import { useDashboard, dailySeries, dateRangeDays } from '../lib/useDashboard.js';
 import { todayISO, fmtDateTH, fmtNum } from '../lib/helpers.js';
 
 /* ---------- Date range picker ---------- */
@@ -98,29 +98,16 @@ const DEFECT_COLORS = [
   '#9b8afb', '#f472b6', '#34d399', '#60a5fa', '#fb923c',
 ];
 
-export function DefectMaterialDashboard({ records, store }) {
+export function DefectMaterialDashboard({ from, to, branchIds, store }) {
   const isMobile = useIsMobile();
+  const { kpi, material } = useDashboard(from || '1900-01-01', to || todayISO(), branchIds, { material: true });
   const breakdown = useMemo(() => {
-    const map = {};
-    let totalGrams = 0;
-    records.forEach(r => {
-      const menu = store.menus.find(m => m.id === r.menuId);
-      if (!menu) return;
-      const bom = store.bomDefect?.[menu.id] || [];
-      const grams = r.qty || 0;
-      totalGrams += grams;
-      bom.forEach(b => {
-        const used = grams * b.qty;
-        if (!map[b.code]) {
-          const ing = store.ingredients.find(i => i.code === b.code);
-          map[b.code] = { code: b.code, name: ing?.name || b.code, unit: ing?.unit || '', qty: 0, occurrences: 0 };
-        }
-        map[b.code].qty += used;
-        map[b.code].occurrences += 1;
-      });
-    });
-    return { rows: Object.values(map).sort((a, b) => b.qty - a.qty), totalGrams };
-  }, [records, store]);
+    const rows = (material || []).map(m => {
+      const ing = store.ingredients.find(i => i.code === m.code);
+      return { code: m.code, name: ing?.name || m.code, unit: ing?.unit || '', qty: m.qty, occurrences: m.occurrences };
+    }).sort((a, b) => b.qty - a.qty);
+    return { rows, totalGrams: kpi.defectQty, defectCount: kpi.defect };
+  }, [material, kpi, store]);
 
   const top10 = breakdown.rows.slice(0, 10);
   const maxQty = top10[0]?.qty || 1;
@@ -138,7 +125,7 @@ export function DefectMaterialDashboard({ records, store }) {
           <h3 className="font-display" style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>เสียหายรายวัตถุดิบ</h3>
           <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 4 }}>
             {breakdown.rows.length > 0 ? (
-              <>คำนวณจาก <span className="num">{records.length}</span> บันทึก · เบสรวม <span className="num">{fmtNum(breakdown.totalGrams)}</span> กรัม</>
+              <>คำนวณจาก <span className="num">{breakdown.defectCount}</span> บันทึก · เบสรวม <span className="num">{fmtNum(breakdown.totalGrams)}</span> กรัม</>
             ) : 'ยังไม่มีข้อมูลของเสียในช่วงเวลา'}
           </div>
         </div>
@@ -196,48 +183,34 @@ export function DefectMaterialDashboard({ records, store }) {
 }
 
 /* ---------- Area Dashboard ---------- */
-function AreaDashboard({ user, myBranches, records, store }) {
+function AreaDashboard({ user, myBranches, branchIds, store }) {
   const isMobile = useIsMobile();
   const initEnd = todayISO();
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
-  useEnsureRecordsLoaded(from);
 
-  const inRange = records.filter(r => r.date >= from && r.date <= to);
-  const prod = inRange.filter(r => r.type === 'production');
-  const defects = inRange.filter(r => r.type === 'defect');
-  const passed = prod.filter(r => r.status === 'passed');
-  const failed = prod.filter(r => r.status === 'failed');
-  const passRate = prod.length ? Math.round(passed.length / prod.length * 100) : 0;
+  const { kpi, daily, byBranch: byBranchRows, failReasons: failReasonRows, defectReasons: defectReasonRows } =
+    useDashboard(from, to, branchIds, { daily: true, byBranch: true, reasons: true });
 
-  const days = [];
-  {
-    const start = new Date(from), end = new Date(to);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      days.push(d.toISOString().slice(0, 10));
-    }
-  }
-  const dailyProd = days.map(d => prod.filter(r => r.date === d).length);
-  const dailyPass = days.map(d => passed.filter(r => r.date === d).length);
-  const dailyFail = days.map(d => failed.filter(r => r.date === d).length);
-  const dailyDef  = days.map(d => defects.filter(r => r.date === d).length);
+  const prodN = kpi.prod, passedN = kpi.passed, failedN = kpi.failed, defectN = kpi.defect;
+  const passRate = prodN ? Math.round(passedN / prodN * 100) : 0;
 
+  const days = dateRangeDays(from, to);
+  const dailyProd = dailySeries(daily, days, 'prod');
+  const dailyPass = dailySeries(daily, days, 'passed');
+  const dailyFail = dailySeries(daily, days, 'failed');
+  const dailyDef  = dailySeries(daily, days, 'defect');
+
+  const byBranchMap = {};
+  (byBranchRows || []).forEach(r => { byBranchMap[r.branchId] = r; });
   const byBranch = myBranches.map(b => {
-    const p = prod.filter(r => r.branchId === b.id);
-    const pa = p.filter(r => r.status === 'passed').length;
-    const fa = p.filter(r => r.status === 'failed').length;
-    const de = defects.filter(r => r.branchId === b.id).length;
-    return { branch: b, prod: p.length, passed: pa, failed: fa, defect: de, passRate: p.length ? Math.round(pa / p.length * 100) : 0 };
+    const s = byBranchMap[b.id] || { prod: 0, passed: 0, failed: 0, defect: 0 };
+    return { branch: b, prod: s.prod, passed: s.passed, failed: s.failed, defect: s.defect, passRate: s.prod ? Math.round(s.passed / s.prod * 100) : 0 };
   }).sort((a, b) => b.prod - a.prod);
 
-  const failReasons = {};
-  failed.forEach(r => { if (r.reason) failReasons[r.reason] = (failReasons[r.reason] || 0) + 1; });
-  const topFails = Object.entries(failReasons).sort((a, b) => b[1] - a[1]).slice(0, 5);
-
-  const defectReasons = {};
-  defects.forEach(r => { if (r.reason) defectReasons[r.reason] = (defectReasons[r.reason] || 0) + 1; });
-  const topDefects = Object.entries(defectReasons).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const topFails = (failReasonRows || []).slice(0, 5);
+  const topDefects = (defectReasonRows || []).slice(0, 5);
 
   return (
     <>
@@ -249,10 +222,10 @@ function AreaDashboard({ user, myBranches, records, store }) {
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? 12 : 18, marginBottom: 22 }} className="fade-up">
-        <StatCard label="ล็อตการผลิต" value={fmtNum(prod.length)} sub={`${days.length} วัน`} icon="factory" accent="var(--amber)" trend={dailyProd} />
-        <StatCard label="ผ่าน QC" value={fmtNum(passed.length)} sub={`${passRate}% pass rate`} icon="check" accent="var(--matcha)" trend={dailyPass} />
-        <StatCard label="ไม่ผ่าน QC" value={fmtNum(failed.length)} sub="ต้องปรับปรุง" icon="alert" accent="var(--bad)" trend={dailyFail} />
-        <StatCard label="ของเสียหาย" value={fmtNum(defects.length)} sub="ในช่วงเวลา" icon="trash" accent="var(--info)" trend={dailyDef} />
+        <StatCard label="ล็อตการผลิต" value={fmtNum(prodN)} sub={`${days.length} วัน`} icon="factory" accent="var(--amber)" trend={dailyProd} />
+        <StatCard label="ผ่าน QC" value={fmtNum(passedN)} sub={`${passRate}% pass rate`} icon="check" accent="var(--matcha)" trend={dailyPass} />
+        <StatCard label="ไม่ผ่าน QC" value={fmtNum(failedN)} sub="ต้องปรับปรุง" icon="alert" accent="var(--bad)" trend={dailyFail} />
+        <StatCard label="ของเสียหาย" value={fmtNum(defectN)} sub="ในช่วงเวลา" icon="trash" accent="var(--info)" trend={dailyDef} />
       </div>
 
       <div className="card" style={{ padding: '24px 26px', marginBottom: 22 }}>
@@ -302,9 +275,9 @@ function AreaDashboard({ user, myBranches, records, store }) {
           <h3 className="font-display" style={{ margin: '0 0 18px', fontSize: 18, fontWeight: 600 }}>สัดส่วนคุณภาพ</h3>
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <Donut segments={[
-              { label: 'ผ่าน QC',    value: passed.length,  color: 'var(--ok)' },
-              { label: 'ไม่ผ่าน QC', value: failed.length,  color: 'var(--bad)' },
-              { label: 'ของเสียหาย', value: defects.length, color: 'var(--warn)' },
+              { label: 'ผ่าน QC',    value: passedN,  color: 'var(--ok)' },
+              { label: 'ไม่ผ่าน QC', value: failedN,  color: 'var(--bad)' },
+              { label: 'ของเสียหาย', value: defectN, color: 'var(--warn)' },
             ]} size={180} thickness={28} />
           </div>
           <div style={{ marginTop: 20, padding: '14px 16px', background: 'var(--bg)', borderRadius: 12, border: '1px solid var(--line)' }}>
@@ -335,20 +308,21 @@ function AreaDashboard({ user, myBranches, records, store }) {
         </div>
       </div>
 
-      <DefectMaterialDashboard records={defects} store={store} />
+      <DefectMaterialDashboard from={from} to={to} branchIds={branchIds} store={store} />
     </>
   );
 }
 
 /* ---------- Area > Branches ---------- */
-function AreaBranches({ myBranches, records }) {
+function AreaBranches({ myBranches, branchIds }) {
   const isMobile = useIsMobile();
   const initEnd = todayISO();
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
-  useEnsureRecordsLoaded(from);
-  const inRange = records.filter(r => r.date >= from && r.date <= to);
+  const { byBranch: byBranchRows } = useDashboard(from, to, branchIds, { byBranch: true });
+  const byBranchMap = {};
+  (byBranchRows || []).forEach(r => { byBranchMap[r.branchId] = r; });
 
   return (
     <>
@@ -360,12 +334,9 @@ function AreaBranches({ myBranches, records }) {
       />
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)', gap: 18 }} className="fade-up">
         {myBranches.map(b => {
-          const recs = inRange.filter(r => r.branchId === b.id);
-          const prod = recs.filter(r => r.type === 'production');
-          const passed = prod.filter(r => r.status === 'passed');
-          const failed = prod.filter(r => r.status === 'failed');
-          const defects = recs.filter(r => r.type === 'defect');
-          const passRate = prod.length ? Math.round(passed.length / prod.length * 100) : 0;
+          const s = byBranchMap[b.id] || { prod: 0, passed: 0, failed: 0, defect: 0 };
+          const prodLen = s.prod, passedLen = s.passed, failedLen = s.failed, defectLen = s.defect;
+          const passRate = prodLen ? Math.round(passedLen / prodLen * 100) : 0;
           return (
             <div key={b.id} className="card hover" style={{ padding: '22px 26px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
@@ -376,10 +347,10 @@ function AreaBranches({ myBranches, records }) {
                 <span className={`badge ${passRate >= 90 ? 'ok' : passRate >= 80 ? 'warn' : 'bad'}`}><span className="dot" />{passRate}%</span>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 16 }}>
-                <Stat n={prod.length}    l="ล็อต"    c="var(--ink)" />
-                <Stat n={passed.length}  l="ผ่าน"    c="var(--ok)" />
-                <Stat n={failed.length}  l="ไม่ผ่าน" c="var(--bad)" />
-                <Stat n={defects.length} l="ของเสีย" c="var(--warn)" />
+                <Stat n={prodLen}    l="ล็อต"    c="var(--ink)" />
+                <Stat n={passedLen}  l="ผ่าน"    c="var(--ok)" />
+                <Stat n={failedLen}  l="ไม่ผ่าน" c="var(--bad)" />
+                <Stat n={defectLen} l="ของเสีย" c="var(--warn)" />
               </div>
               <div className="bar"><i style={{ width: `${passRate}%` }} /></div>
             </div>
@@ -395,8 +366,7 @@ export function AreaView({ user, store, refresh, onLogout }) {
   const [page, setPage] = useState('dashboard');
 
   const myBranches = store.branches.filter(b => (user.areas || []).includes(b.area));
-  const myBranchIds = new Set(myBranches.map(b => b.id));
-  const myRecords = store.records.filter(r => myBranchIds.has(r.branchId));
+  const myBranchIds = myBranches.map(b => b.id);
 
   const nav = [
     { key: 'dashboard',     label: 'แดชบอร์ด',       icon: 'dashboard' },
@@ -407,10 +377,10 @@ export function AreaView({ user, store, refresh, onLogout }) {
 
   return (
     <AppShell user={user} onLogout={onLogout} nav={nav} current={page} onNav={setPage}>
-      {page === 'dashboard'     && <AreaDashboard user={user} myBranches={myBranches} records={myRecords} store={store} />}
-      {page === 'branches'      && <AreaBranches  myBranches={myBranches} records={myRecords} />}
-      {page === 'history'       && <SplitHistoryPage records={myRecords} store={store} title="ประวัติการผลิต" eyebrow="History" showBranch showBranchFilter refresh={refresh} branches={myBranches} />}
-      {page === 'defectHistory' && <DefectHistoryPage records={myRecords} store={store} title="ประวัติเสียหาย" eyebrow="Defect History" showBranch showBranchFilter refresh={refresh} branches={myBranches} />}
+      {page === 'dashboard'     && <AreaDashboard user={user} myBranches={myBranches} branchIds={myBranchIds} store={store} />}
+      {page === 'branches'      && <AreaBranches  myBranches={myBranches} branchIds={myBranchIds} />}
+      {page === 'history'       && <SplitHistoryPage scopeBranchIds={myBranchIds} store={store} title="ประวัติการผลิต" eyebrow="History" showBranch showBranchFilter refresh={refresh} branches={myBranches} />}
+      {page === 'defectHistory' && <DefectHistoryPage scopeBranchIds={myBranchIds} store={store} title="ประวัติเสียหาย" eyebrow="Defect History" showBranch showBranchFilter refresh={refresh} branches={myBranches} />}
     </AppShell>
   );
 }

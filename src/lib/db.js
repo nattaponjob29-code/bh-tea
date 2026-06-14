@@ -49,63 +49,85 @@ function buildBomMap(rows, hasQty) {
   return map;
 }
 
-// ─── Fetch records (paged + windowed) ─────────────────────────────────────────
-
-// วันที่ย้อนหลัง n วัน → 'YYYY-MM-DD' (ใช้กำหนดหน้าต่างข้อมูลล่าสุด)
-function daysAgoISO(n) {
-  const d = new Date();
-  d.setDate(d.getDate() - n);
-  return d.toISOString().slice(0, 10);
+// ─── Records: ranged fetch for History detail ─────────────────────────────────
+// ดึงเฉพาะแถวในช่วงวันที่/สาขาที่เลือก (ไม่โหลดทั้งตาราง) — ใช้ในหน้าประวัติ
+// limit 1000 = เพดาน PostgREST ต่อครั้ง; total = จำนวนจริงในช่วง (count)
+export async function fetchRecords({ from, to, branchIds, type, limit = 1000, offset = 0 } = {}) {
+  let q = supabase.from('records').select('*', { count: 'exact' });
+  if (from) q = q.gte('date', from);
+  if (to)   q = q.lte('date', to);
+  if (type) q = q.eq('type', type);
+  if (branchIds && branchIds.length) q = q.in('branch_id', branchIds);
+  q = q.order('date', { ascending: false })
+       .order('time', { ascending: false })
+       .order('id', { ascending: false })
+       .range(offset, offset + limit - 1);
+  const { data, error, count } = await q;
+  if (error) throw new Error(error.message);
+  return { rows: (data || []).map(fromRecord), total: count ?? (data?.length || 0) };
 }
 
-// สร้าง query records พร้อมกรองช่วงวันที่ + เรียงเสถียร (tiebreaker = id)
-// since = เอาตั้งแต่วันนี้ (date >= since), before = เอาก่อนวันนี้ (date < before)
-function recordsQuery(withCount, { since, before } = {}) {
-  let q = supabase.from('records').select('*', withCount ? { count: 'exact' } : undefined);
-  if (since)  q = q.gte('date', since);
-  if (before) q = q.lt('date', before);
-  return q
-    .order('date', { ascending: false })
-    .order('time', { ascending: false })
-    .order('id', { ascending: false });
+// ─── Server-side aggregations (RPC) ───────────────────────────────────────────
+// คำนวณ/สรุปที่ Postgres แล้วส่งกลับแค่ผลก้อนเล็ก — ลด egress มหาศาล
+const branchArg = (ids) => (ids && ids.length ? ids : null);
+
+async function rpc(fn, args) {
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) throw new Error(error.message);
+  return data;
 }
 
-// PostgREST จำกัดการส่งข้อมูลสูงสุด 1,000 แถว/ครั้ง
-// ดึงหน้าแรกพร้อมจำนวนรวม แล้วถ้ามีมากกว่านั้นค่อยยิงหน้าที่เหลือ "พร้อมกัน" (parallel)
-async function fetchRecordsPaged(opts = {}) {
-  const PAGE = 1000;
-  const first = await recordsQuery(true, opts).range(0, PAGE - 1);
-  if (first.error) throw new Error(first.error.message);
-
-  let all = first.data || [];
-  const total = first.count ?? all.length;
-  if (total > PAGE) {
-    const reqs = [];
-    for (let from = PAGE; from < total; from += PAGE) {
-      reqs.push(recordsQuery(false, opts).range(from, from + PAGE - 1));
-    }
-    const results = await Promise.all(reqs);
-    for (const { data, error } of results) {
-      if (error) throw new Error(error.message);
-      if (data) all = all.concat(data);
-    }
-  }
-  return all;
+export async function statsKpi(from, to, branchIds) {
+  const d = await rpc('stats_kpi', { d_from: from, d_to: to, p_branches: branchArg(branchIds) });
+  const r = d?.[0] || {};
+  return { prod: +r.prod || 0, passed: +r.passed || 0, failed: +r.failed || 0, defect: +r.defect || 0, defectQty: +r.defect_qty || 0 };
 }
 
-// ดึงประวัติเก่าตามช่วงวันที่ (ใช้ตอนผู้ใช้เลือกดูย้อนหลังเกินหน้าต่างเริ่มต้น)
-// since = null → เอาทุกอย่างก่อน before (โหลดทั้งหมดที่เหลือ)
-export async function fetchRecordsRange(since, before) {
-  const rows = await fetchRecordsPaged({ since: since || undefined, before });
-  return rows.map(fromRecord);
+export async function statsDaily(from, to, branchIds) {
+  const d = await rpc('stats_daily', { d_from: from, d_to: to, p_branches: branchArg(branchIds) });
+  return (d || []).map(r => ({
+    date: r.d, prod: +r.prod || 0, passed: +r.passed || 0, failed: +r.failed || 0, defect: +r.defect || 0,
+  }));
 }
 
-// ─── Fetch all store data ─────────────────────────────────────────────────────
+export async function statsByBranch(from, to, branchIds) {
+  const d = await rpc('stats_by_branch', { d_from: from, d_to: to, p_branches: branchArg(branchIds) });
+  return (d || []).map(r => ({
+    branchId: r.branch_id, prod: +r.prod || 0, passed: +r.passed || 0, failed: +r.failed || 0, defect: +r.defect || 0,
+  }));
+}
 
-// โหลดเฉพาะข้อมูลล่าสุด (ค่าเริ่มต้น 7 วัน) ตอนเปิดแอป — ลด egress/disk IO
-// sinceDays = null → โหลดประวัติทั้งหมด
-export async function fetchStore({ sinceDays = 7 } = {}) {
-  const since = sinceDays ? daysAgoISO(sinceDays) : null;
+export async function statsByMenu(from, to, branchIds) {
+  const d = await rpc('stats_by_menu', { d_from: from, d_to: to, p_branches: branchArg(branchIds) });
+  return (d || []).map(r => ({
+    menuId: r.menu_id, prod: +r.prod || 0, passed: +r.passed || 0, failed: +r.failed || 0,
+    defect: +r.defect || 0, defectQty: +r.defect_qty || 0,
+  }));
+}
+
+// kind = 'failed' (ไม่ผ่าน QC) | 'defect' (ของเสีย) → [[reason, count], ...]
+export async function statsReasons(from, to, kind, branchIds) {
+  const d = await rpc('stats_reasons', { d_from: from, d_to: to, p_kind: kind, p_branches: branchArg(branchIds) });
+  return (d || []).map(r => [r.reason, +r.n || 0]);
+}
+
+export async function defectByMaterial(from, to, branchIds) {
+  const d = await rpc('defect_by_material', { d_from: from, d_to: to, p_branches: branchArg(branchIds) });
+  return (d || []).map(r => ({
+    code: r.code, qty: +r.qty || 0, occurrences: +r.occurrences || 0, totalGrams: +r.total_grams || 0,
+  }));
+}
+
+// จำนวนบันทึกทั้งหมดรายสาขา (all-time) → { branchId: n } — ใช้ในหน้า Admin จัดการสาขา
+export async function branchRecordCounts() {
+  const d = await rpc('branch_record_counts', {});
+  const map = {};
+  (d || []).forEach(r => { map[r.branch_id] = +r.n || 0; });
+  return map;
+}
+
+// ─── Fetch reference data (small tables — ไม่ดึง records) ─────────────────────
+export async function fetchStore() {
   const [
     { data: branches, error: e1 },
     { data: menus, error: e2 },
@@ -113,7 +135,6 @@ export async function fetchStore({ sinceDays = 7 } = {}) {
     { data: bomProdRows, error: e4 },
     { data: bomDefectRows, error: e5 },
     { data: profiles, error: e6 },
-    records,
   ] = await Promise.all([
     supabase.from('branches').select('*').order('id'),
     supabase.from('menus').select('*').order('id'),
@@ -121,7 +142,6 @@ export async function fetchStore({ sinceDays = 7 } = {}) {
     supabase.from('bom_prod').select('*'),
     supabase.from('bom_defect').select('*'),
     supabase.from('profiles').select('*').order('username'),
-    fetchRecordsPaged(since ? { since } : {}),
   ]);
 
   const errors = [e1, e2, e3, e4, e5, e6].filter(Boolean);
@@ -137,13 +157,10 @@ export async function fetchStore({ sinceDays = 7 } = {}) {
       id: p.id, username: p.username, role: p.role,
       branchId: p.branch_id || '', areas: p.areas || [], label: p.label || '',
     })),
-    records: (records || []).map(fromRecord),
-    // วันที่เก่าสุดที่ "มีข้อมูลครบ" ในเครื่อง — null = โหลดครบทั้งหมดแล้ว
-    recordsSince: since,
   };
 }
 
-// นับจำนวน records ทั้งหมด (ไม่ดึงข้อมูลแถว — egress ~0) สำหรับสถิติรวมของ Admin
+// นับยอดรวมทั้งหมดจาก DB (egress ~0) — สำหรับสถิติ "ทั้งหมด" ของ Admin
 export async function fetchRecordStats() {
   const countOnly = () => supabase.from('records').select('id', { count: 'exact', head: true });
   const [tot, prod, passed] = await Promise.all([
@@ -161,7 +178,7 @@ export async function fetchRecordStats() {
   };
 }
 
-// ─── Records ──────────────────────────────────────────────────────────────────
+// ─── Records mutations ────────────────────────────────────────────────────────
 
 export async function insertRecord(rec) {
   const { error } = await supabase.from('records').insert(toRecord(rec));

@@ -6,9 +6,9 @@ import { DefectMaterialDashboard } from './Area.jsx';
 import {
   saveBranch, deleteBranch, saveMenu, deleteMenu,
   saveIngredient, deleteIngredient, saveBomProd, saveBomDefect, updateProfile,
-  fetchRecordStats,
+  fetchRecordStats, branchRecordCounts,
 } from '../lib/db.js';
-import { useEnsureRecordsLoaded } from '../context/StoreContext.jsx';
+import { useDashboard, dailySeries, dateRangeDays } from '../lib/useDashboard.js';
 import { ROLE_OPTIONS, ROLE_TH, ROLE_COLOR } from '../lib/constants.js';
 import { todayISO, fmtNum } from '../lib/helpers.js';
 
@@ -42,30 +42,23 @@ function SysRow({ label, value, ok }) {
 }
 
 function AdminOverview({ store, refresh }) {
-  const prod = store.records.filter(r => r.type === 'production');
-  const defects = store.records.filter(r => r.type === 'defect');
   const menusWithBom = Object.keys(store.bomProd || {}).filter(k => (store.bomProd[k] || []).length > 0).length;
 
-  // กราฟผลิต 14 วัน → ต้องมั่นใจว่ามีข้อมูลย้อนหลังครบ 14 วัน (โหลดเพิ่มถ้าหน้าต่างเริ่มต้นสั้นกว่า)
+  // กราฟผลิต 14 วัน → ดึงสรุปรายวันจาก RPC (egress เล็ก)
   const trendFrom = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 13); return d.toISOString().slice(0, 10); }, []);
-  useEnsureRecordsLoaded(trendFrom);
+  const today = useMemo(() => todayISO(), []);
+  const { daily } = useDashboard(trendFrom, today, null, { daily: true });
+  const days = useMemo(() => dateRangeDays(trendFrom, today), [trendFrom, today]);
+  const trend = useMemo(() => dailySeries(daily, days, 'prod'), [daily, days]);
 
-  // นับยอดรวมทั้งหมดจาก DB (egress ~0) — แอปโหลดมาแค่ข้อมูลล่าสุด store.records จึงไม่ใช่ยอดรวม
+  // นับยอดรวมทั้งหมดจาก DB (egress ~0)
   const [stats, setStats] = useState(null);
   useEffect(() => { fetchRecordStats().then(setStats).catch(() => {}); }, []);
-  const totalProd = stats?.production ?? prod.length;
-  const totalRecords = stats?.total ?? store.records.length;
-  const passRate = stats
-    ? (stats.production ? Math.round(stats.passedProduction / stats.production * 100) : 0)
-    : (prod.length ? Math.round(prod.filter(r => r.status === 'passed').length / prod.length * 100) : 0);
-
-  const trend = useMemo(() => {
-    return Array.from({ length: 14 }, (_, i) => {
-      const d = new Date(); d.setDate(d.getDate() - (13 - i));
-      const iso = d.toISOString().slice(0, 10);
-      return prod.filter(r => r.date === iso).length;
-    });
-  }, [prod]);
+  const totalProd = stats?.production ?? 0;
+  const totalRecords = stats?.total ?? 0;
+  const passRate = stats && stats.production
+    ? Math.round(stats.passedProduction / stats.production * 100)
+    : 0;
 
   return (
     <>
@@ -108,7 +101,7 @@ function AdminOverview({ store, refresh }) {
       </div>
 
       <div style={{ marginTop: 22 }}>
-        <DefectMaterialDashboard records={defects} store={store} />
+        <DefectMaterialDashboard from={trendFrom} to={today} branchIds={null} store={store} />
       </div>
     </>
   );
@@ -125,6 +118,9 @@ function AdminBranches({ store, refresh }) {
   const [saving, setSaving] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [recCounts, setRecCounts] = useState({});
+
+  useEffect(() => { branchRecordCounts().then(setRecCounts).catch(() => {}); }, []);
 
   const allSelected = store.branches.length > 0 && selectedIds.size === store.branches.length;
   const someSelected = selectedIds.size > 0 && !allSelected;
@@ -239,7 +235,7 @@ function AdminBranches({ store, refresh }) {
           </thead>
           <tbody>
             {store.branches.map(b => {
-              const cnt = store.records.filter(r => r.branchId === b.id).length;
+              const cnt = recCounts[b.id] || 0;
               const checked = selectedIds.has(b.id);
               return (
                 <tr key={b.id} style={{ background: checked ? 'color-mix(in oklch, var(--amber) 6%, transparent)' : undefined }}>
@@ -1168,8 +1164,8 @@ export function AdminView({ user, store, refresh, onLogout }) {
       {page === 'menus'         && <AdminMenus     store={store} refresh={refresh} />}
       {page === 'materials'     && <AdminMaterials store={store} refresh={refresh} />}
       {page === 'bom'           && <AdminBOM       store={store} refresh={refresh} />}
-      {page === 'history'       && <SplitHistoryPage records={store.records} store={store} title="ประวัติการผลิตทั้งระบบ" eyebrow="Admin · Production" showBranch showBranchFilter refresh={refresh} />}
-      {page === 'defectHistory' && <DefectHistoryPage records={store.records} store={store} title="ประวัติเสียหายทั้งระบบ" eyebrow="Admin · Defects" showBranch showBranchFilter refresh={refresh} />}
+      {page === 'history'       && <SplitHistoryPage store={store} title="ประวัติการผลิตทั้งระบบ" eyebrow="Admin · Production" showBranch showBranchFilter refresh={refresh} />}
+      {page === 'defectHistory' && <DefectHistoryPage store={store} title="ประวัติเสียหายทั้งระบบ" eyebrow="Admin · Defects" showBranch showBranchFilter refresh={refresh} />}
     </AppShell>
   );
 }

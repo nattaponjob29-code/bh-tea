@@ -1,15 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { AppShell, PageHeader, Icon, StatCard, Empty, Modal, useToast, useIsMobile } from '../components/ui.jsx';
 import { HistoryView, DefectHistoryPage } from '../components/History.jsx';
 import { todayISO, nowHM, fmtDateTH, fmtNum, greetingTH } from '../lib/helpers.js';
 import { DEFECT_REASONS, FAIL_REASONS } from '../lib/constants.js';
-import { insertRecord, insertRecords } from '../lib/db.js';
-import { useStore } from '../context/StoreContext.jsx';
+import { insertRecord, insertRecords, statsKpi, fetchRecords } from '../lib/db.js';
+import { useDashboard, dailySeries, dateRangeDays } from '../lib/useDashboard.js';
 
 export function BranchView({ user, store, refresh, onLogout }) {
   const [page, setPage] = useState('home');
   const branch = store.branches.find(b => b.id === user.branchId);
-  const myRecords = store.records.filter(r => r.branchId === user.branchId);
+  const branchId = user.branchId;
 
   const nav = [
     { key: 'home',          label: 'หน้าหลัก',        icon: 'dashboard' },
@@ -21,35 +21,37 @@ export function BranchView({ user, store, refresh, onLogout }) {
 
   return (
     <AppShell user={user} onLogout={onLogout} nav={nav} current={page} onNav={setPage}>
-      {page === 'home'          && <BranchHome user={user} branch={branch} records={myRecords} go={setPage} store={store} />}
+      {page === 'home'          && <BranchHome user={user} branch={branch} branchId={branchId} go={setPage} store={store} />}
       {page === 'produce'       && <BranchProduce user={user} store={store} refresh={refresh} />}
       {page === 'defect'        && <BranchDefect user={user} store={store} refresh={refresh} />}
-      {page === 'history'       && <BranchHistory records={myRecords} store={store} refresh={refresh} />}
-      {page === 'defectHistory' && <DefectHistoryPage records={myRecords} store={store} title="ประวัติเสียหายของสาขา" eyebrow="Defect History" showBranch={false} refresh={refresh} />}
+      {page === 'history'       && <BranchHistory branchId={branchId} store={store} refresh={refresh} />}
+      {page === 'defectHistory' && <DefectHistoryPage scopeBranchIds={[branchId]} store={store} title="ประวัติเสียหายของสาขา" eyebrow="Defect History" showBranch={false} refresh={refresh} />}
     </AppShell>
   );
 }
 
-function BranchHome({ user, branch, records, go, store }) {
+function BranchHome({ user, branch, branchId, go, store }) {
   const isMobile = useIsMobile();
-  const today = todayISO();
-  const todayProd = records.filter(r => r.type === 'production' && r.date === today);
-  const todayDef  = records.filter(r => r.type === 'defect'     && r.date === today);
-  const todayPass = todayProd.filter(r => r.status === 'passed').length;
-  const todayFail = todayProd.filter(r => r.status === 'failed').length;
-  const passRate  = todayProd.length ? Math.round(todayPass / todayProd.length * 100) : 0;
+  const today = useMemo(() => todayISO(), []);
+  const from7 = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); }, []);
+  const { daily } = useDashboard(from7, today, [branchId], { daily: true });
 
-  const trend = useMemo(() => {
-    const arr = [];
-    for (let d = 6; d >= 0; d--) {
-      const day = new Date(); day.setDate(day.getDate() - d);
-      const iso = day.toISOString().slice(0, 10);
-      arr.push(records.filter(r => r.type === 'production' && r.date === iso).length);
-    }
-    return arr;
-  }, [records]);
+  const days = useMemo(() => dateRangeDays(from7, today), [from7, today]);
+  const trend = useMemo(() => dailySeries(daily, days, 'prod'), [daily, days]);
 
-  const recent = records.slice().sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)).slice(0, 5);
+  const todayRow = (daily || []).find(r => r.date === today) || { prod: 0, passed: 0, failed: 0, defect: 0 };
+  const todayProdN = todayRow.prod, todayPass = todayRow.passed, todayFail = todayRow.failed, todayDefN = todayRow.defect;
+  const passRate = todayProdN ? Math.round(todayPass / todayProdN * 100) : 0;
+
+  // ยอดของเสียทั้งหมด (all-time) + รายการล่าสุด 5 — ดึงจาก server โดยตรง (egress เล็ก)
+  const [totalDef, setTotalDef] = useState(0);
+  const [recent, setRecent] = useState([]);
+  useEffect(() => {
+    let alive = true;
+    statsKpi('1900-01-01', today, [branchId]).then(k => { if (alive) setTotalDef(k.defect); }).catch(() => {});
+    fetchRecords({ branchIds: [branchId], limit: 5 }).then(r => { if (alive) setRecent(r.rows); }).catch(() => {});
+    return () => { alive = false; };
+  }, [branchId, today]);
 
   return (
     <>
@@ -65,10 +67,10 @@ function BranchHome({ user, branch, records, go, store }) {
         }
       />
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? 12 : 18, marginBottom: 24 }} className="fade-up">
-        <StatCard label="ล็อตวันนี้"   value={todayProd.length} icon="factory" accent="var(--amber)"  trend={trend} />
+        <StatCard label="ล็อตวันนี้"   value={todayProdN} icon="factory" accent="var(--amber)"  trend={trend} />
         <StatCard label="ผ่าน QC"      value={todayPass} sub={`${passRate}% ของวันนี้`} icon="check" accent="var(--matcha)" />
         <StatCard label="ไม่ผ่าน QC"   value={todayFail} sub="ต้องแก้ไข" icon="alert" accent="var(--bad)" />
-        <StatCard label="ของเสียหาย"   value={todayDef.length} sub={`รวม ${records.filter(r => r.type === 'defect').length} ครั้ง`} icon="trash" accent="var(--info)" />
+        <StatCard label="ของเสียหาย"   value={todayDefN} sub={`รวม ${totalDef} ครั้ง`} icon="trash" accent="var(--info)" />
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '2fr 1fr', gap: 18 }}>
         <div className="card" style={{ padding: '22px 26px' }}>
@@ -154,7 +156,6 @@ function Row({ label, value }) {
 
 function BranchProduce({ user, store, refresh }) {
   const toast = useToast();
-  const { addRecords } = useStore();
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -214,7 +215,6 @@ function BranchProduce({ user, store, refresh }) {
     setSaving(true);
     try {
       await insertRecord(rec);
-      addRecords(rec);
       toast(`บันทึก ${rec.id} สำเร็จ`, 'ok');
       setSelected(null); setForm(emptyForm()); setConfirmOpen(false);
     } catch (e) {
@@ -417,7 +417,6 @@ function BranchProduce({ user, store, refresh }) {
 
 function BranchDefect({ user, store, refresh }) {
   const toast = useToast();
-  const { addRecords } = useStore();
   const [items, setItems] = useState([{ menuId: '', grams: '' }]);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
@@ -458,7 +457,6 @@ function BranchDefect({ user, store, refresh }) {
     setSaving(true);
     try {
       await insertRecords(newRecs);
-      addRecords(newRecs);
       toast(`บันทึกของเสีย ${newRecs.length} รายการ`, 'warn');
       setItems([{ menuId: '', grams: '' }]); setReason(''); setNote('');
     } catch (e) {
@@ -524,11 +522,11 @@ function BranchDefect({ user, store, refresh }) {
   );
 }
 
-function BranchHistory({ records, store, refresh }) {
+function BranchHistory({ branchId, store, refresh }) {
   return (
     <>
       <PageHeader eyebrow="History" title="ประวัติการผลิต" subtitle="ดูประวัติการผลิตของสาขา · ลบ / Export ได้" />
-      <HistoryView mode="production" records={records} store={store} sectionTitle="ประวัติการผลิต" sectionIcon="factory" showBranch={false} refresh={refresh} />
+      <HistoryView mode="production" scopeBranchIds={[branchId]} store={store} sectionTitle="ประวัติการผลิต" sectionIcon="factory" showBranch={false} refresh={refresh} />
     </>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AppShell, PageHeader, StatCard, Icon, Empty, useIsMobile } from '../components/ui.jsx';
 import { SplitHistoryPage, DefectHistoryPage } from '../components/History.jsx';
 import { DateRangePicker, StackedBars, Legend } from './Area.jsx';
-import { useEnsureRecordsLoaded } from '../context/StoreContext.jsx';
+import { useDashboard, dailySeries, dateRangeDays } from '../lib/useDashboard.js';
 import { todayISO, fmtDateTH, fmtNum } from '../lib/helpers.js';
 
 function RankList({ items, positive }) {
@@ -45,39 +45,28 @@ function QCOverview({ store }) {
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
-  useEnsureRecordsLoaded(from);
+  const { kpi, daily, byBranch, byMenu } = useDashboard(from, to, null, { daily: true, byBranch: true, byMenu: true });
 
-  const inRange = store.records.filter(r => r.date >= from && r.date <= to);
-  const prod = inRange.filter(r => r.type === 'production');
-  const defects = inRange.filter(r => r.type === 'defect');
-  const passed = prod.filter(r => r.status === 'passed');
-  const failed = prod.filter(r => r.status === 'failed');
-  const passRate = prod.length ? Math.round(passed.length / prod.length * 100) : 0;
+  const prodN = kpi.prod, passedN = kpi.passed, failedN = kpi.failed, defectN = kpi.defect, defectQty = kpi.defectQty;
+  const passRate = prodN ? Math.round(passedN / prodN * 100) : 0;
 
-  const days = [];
-  {
-    const start = new Date(from), end = new Date(to);
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) days.push(d.toISOString().slice(0, 10));
-  }
-  const dailyPass = days.map(d => passed.filter(r => r.date === d).length);
-  const dailyFail = days.map(d => failed.filter(r => r.date === d).length);
-  const dailyDef  = days.map(d => defects.filter(r => r.date === d).length);
+  const days = dateRangeDays(from, to);
+  const dailyPass = dailySeries(daily, days, 'passed');
+  const dailyFail = dailySeries(daily, days, 'failed');
+  const dailyDef  = dailySeries(daily, days, 'defect');
 
+  const byBranchMap = {}; byBranch.forEach(s => { byBranchMap[s.branchId] = s; });
   const branchStats = store.branches.map(b => {
-    const recs = inRange.filter(r => r.branchId === b.id);
-    const p = recs.filter(r => r.type === 'production');
-    const pa = p.filter(r => r.status === 'passed').length;
-    const fa = p.filter(r => r.status === 'failed').length;
-    const de = recs.filter(r => r.type === 'defect').length;
-    return { b, prod: p.length, passed: pa, failed: fa, defect: de, rate: p.length ? pa / p.length * 100 : 100 };
+    const s = byBranchMap[b.id] || { prod: 0, passed: 0, failed: 0, defect: 0 };
+    return { b, prod: s.prod, passed: s.passed, failed: s.failed, defect: s.defect, rate: s.prod ? s.passed / s.prod * 100 : 100 };
   });
   const worst = branchStats.slice().sort((a, b) => a.rate - b.rate).slice(0, 3);
   const best  = branchStats.slice().sort((a, b) => b.rate - a.rate).slice(0, 3);
 
+  const byMenuMap = {}; byMenu.forEach(s => { byMenuMap[s.menuId] = s; });
   const menuFail = store.menus.map(m => {
-    const recs = prod.filter(r => r.menuId === m.id);
-    const f = recs.filter(r => r.status === 'failed').length;
-    return { m, total: recs.length, failed: f, rate: recs.length ? f / recs.length * 100 : 0 };
+    const s = byMenuMap[m.id] || { prod: 0, failed: 0 };
+    return { m, total: s.prod, failed: s.failed, rate: s.prod ? s.failed / s.prod * 100 : 0 };
   }).filter(x => x.total > 0).sort((a, b) => b.rate - a.rate).slice(0, 6);
 
   return (
@@ -90,10 +79,10 @@ function QCOverview({ store }) {
       />
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2,1fr)' : 'repeat(4,1fr)', gap: isMobile ? 12 : 18, marginBottom: 22 }} className="fade-up">
-        <StatCard label="ล็อตทั้งหมด" value={fmtNum(prod.length)} sub={`${store.branches.length} สาขา`} icon="factory" accent="var(--amber)" />
-        <StatCard label="Pass Rate" value={`${passRate}%`} sub={`${fmtNum(passed.length)} / ${fmtNum(prod.length)}`} icon="check" accent="var(--matcha)" />
-        <StatCard label="ไม่ผ่าน QC" value={fmtNum(failed.length)} sub="ต้องตรวจสอบ" icon="alert" accent="var(--bad)" trend={dailyFail} />
-        <StatCard label="ของเสียหาย" value={fmtNum(defects.length)} sub={`รวม ${fmtNum(defects.reduce((s, d) => s + d.qty, 0))} หน่วย`} icon="trash" accent="var(--info)" trend={dailyDef} />
+        <StatCard label="ล็อตทั้งหมด" value={fmtNum(prodN)} sub={`${store.branches.length} สาขา`} icon="factory" accent="var(--amber)" />
+        <StatCard label="Pass Rate" value={`${passRate}%`} sub={`${fmtNum(passedN)} / ${fmtNum(prodN)}`} icon="check" accent="var(--matcha)" />
+        <StatCard label="ไม่ผ่าน QC" value={fmtNum(failedN)} sub="ต้องตรวจสอบ" icon="alert" accent="var(--bad)" trend={dailyFail} />
+        <StatCard label="ของเสียหาย" value={fmtNum(defectN)} sub={`รวม ${fmtNum(defectQty)} หน่วย`} icon="trash" accent="var(--info)" trend={dailyDef} />
       </div>
 
       <div className="card" style={{ padding: '24px 26px', marginBottom: 22 }}>
@@ -165,8 +154,8 @@ function QCBranches({ store }) {
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 13); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
-  useEnsureRecordsLoaded(from);
-  const inRange = store.records.filter(r => r.date >= from && r.date <= to);
+  const { byBranch } = useDashboard(from, to, null, { byBranch: true });
+  const byBranchMap = {}; byBranch.forEach(s => { byBranchMap[s.branchId] = s; });
 
   return (
     <>
@@ -178,12 +167,9 @@ function QCBranches({ store }) {
       />
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 18 }} className="fade-up">
         {store.branches.map(b => {
-          const recs = inRange.filter(r => r.branchId === b.id);
-          const prod = recs.filter(r => r.type === 'production');
-          const pa = prod.filter(r => r.status === 'passed').length;
-          const fa = prod.filter(r => r.status === 'failed').length;
-          const de = recs.filter(r => r.type === 'defect').length;
-          const rate = prod.length ? Math.round(pa / prod.length * 100) : 0;
+          const s = byBranchMap[b.id] || { prod: 0, passed: 0, failed: 0, defect: 0 };
+          const prodLen = s.prod, pa = s.passed, fa = s.failed, de = s.defect;
+          const rate = prodLen ? Math.round(pa / prodLen * 100) : 0;
           const dotColor = rate >= 90 ? 'var(--ok)' : rate >= 80 ? 'var(--warn)' : 'var(--bad)';
           return (
             <div key={b.id} className="card hover" style={{ padding: '20px 22px' }}>
@@ -200,10 +186,10 @@ function QCBranches({ store }) {
               </div>
               <div className="bar" style={{ marginBottom: 12 }}><i style={{ width: `${rate}%`, background: dotColor }} /></div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, fontSize: 11 }}>
-                <Mini n={prod.length} l="ล็อต"    c="var(--ink-2)" />
-                <Mini n={pa}          l="ผ่าน"    c="var(--ok)" />
-                <Mini n={fa}          l="ไม่ผ่าน" c="var(--bad)" />
-                <Mini n={de}          l="ของเสีย" c="var(--warn)" />
+                <Mini n={prodLen} l="ล็อต"    c="var(--ink-2)" />
+                <Mini n={pa}      l="ผ่าน"    c="var(--ok)" />
+                <Mini n={fa}      l="ไม่ผ่าน" c="var(--bad)" />
+                <Mini n={de}      l="ของเสีย" c="var(--warn)" />
               </div>
             </div>
           );
@@ -220,16 +206,12 @@ function QCMenus({ store }) {
   const initStart = (() => { const d = new Date(); d.setDate(d.getDate() - 13); return d.toISOString().slice(0, 10); })();
   const [from, setFrom] = useState(initStart);
   const [to, setTo] = useState(initEnd);
-  useEnsureRecordsLoaded(from);
-  const inRange = store.records.filter(r => r.date >= from && r.date <= to);
+  const { byMenu } = useDashboard(from, to, null, { byMenu: true });
+  const byMenuMap = {}; byMenu.forEach(s => { byMenuMap[s.menuId] = s; });
 
   const rows = store.menus.map(m => {
-    const recs = inRange.filter(r => r.menuId === m.id && r.type === 'production');
-    const pa = recs.filter(r => r.status === 'passed').length;
-    const fa = recs.filter(r => r.status === 'failed').length;
-    const de = inRange.filter(r => r.menuId === m.id && r.type === 'defect');
-    const defQty = de.reduce((s, x) => s + x.qty, 0);
-    return { m, prod: recs.length, passed: pa, failed: fa, defectQty: defQty, rate: recs.length ? pa / recs.length * 100 : 0 };
+    const s = byMenuMap[m.id] || { prod: 0, passed: 0, failed: 0, defectQty: 0 };
+    return { m, prod: s.prod, passed: s.passed, failed: s.failed, defectQty: s.defectQty, rate: s.prod ? s.passed / s.prod * 100 : 0 };
   });
 
   return (
@@ -350,8 +332,8 @@ export function QCView({ user, store, refresh, onLogout }) {
       {page === 'overview'      && <QCOverview store={store} />}
       {page === 'branches'      && <QCBranches store={store} />}
       {page === 'menus'         && <QCMenus    store={store} />}
-      {page === 'history'       && <SplitHistoryPage records={store.records} store={store} title="ประวัติทั้งองค์กร" eyebrow="QC · Production" showBranch showBranchFilter refresh={refresh} />}
-      {page === 'defectHistory' && <DefectHistoryPage records={store.records} store={store} title="ประวัติเสียหายทั้งองค์กร" eyebrow="QC · Defects" showBranch showBranchFilter refresh={refresh} />}
+      {page === 'history'       && <SplitHistoryPage store={store} title="ประวัติทั้งองค์กร" eyebrow="QC · Production" showBranch showBranchFilter refresh={refresh} />}
+      {page === 'defectHistory' && <DefectHistoryPage store={store} title="ประวัติเสียหายทั้งองค์กร" eyebrow="QC · Defects" showBranch showBranchFilter refresh={refresh} />}
     </AppShell>
   );
 }

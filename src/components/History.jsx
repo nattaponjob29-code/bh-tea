@@ -1,8 +1,8 @@
-import { useState, useMemo, useRef, useEffect, Fragment } from 'react';
+import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
 import { Icon, SearchBox, Empty, Modal, useToast } from './ui.jsx';
 import { fmtDateTH, fmtNum, todayISO, csvCell } from '../lib/helpers.js';
-import { deleteRecord, deleteRecords } from '../lib/db.js';
-import { useStore } from '../context/StoreContext.jsx';
+import { deleteRecord, deleteRecords, fetchRecords } from '../lib/db.js';
+import { useDashboard } from '../lib/useDashboard.js';
 
 export function DateQuickPresets({ setFrom, setTo, compact = false }) {
   const [open, setOpen] = useState(false);
@@ -180,9 +180,8 @@ export function exportRecordsCSV(records, store, mode) {
   return '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
 }
 
-export function HistoryView({ records, store, sectionTitle, sectionIcon = 'history', mode = 'all', showBranch = true, showBranchFilter = false, refresh, title, eyebrow, branches }) {
+export function HistoryView({ scopeBranchIds, store, sectionTitle, sectionIcon = 'history', mode = 'all', showBranch = true, showBranchFilter = false, refresh, title, eyebrow, branches }) {
   const toast = useToast();
-  const { removeRecords, loadRecordsSince, loadingMore } = useStore();
   const [tab, setTab] = useState('all');
   const [q, setQ] = useState('');
   const [from, setFrom] = useState(() => todayISO());
@@ -194,6 +193,11 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
   const [deleting, setDeleting] = useState(false);
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
 
+  // แถวที่ดึงจากเซิร์ฟเวอร์ตามช่วงวันที่/สาขา (ไม่ดึงทั้งตาราง)
+  const [rows, setRows] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [loadingRows, setLoadingRows] = useState(true);
+
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 640);
     window.addEventListener('resize', handler);
@@ -202,20 +206,36 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
 
   const branchList = branches || store.branches;
 
-  // ถ้าผู้ใช้เลือกช่วงวันที่ย้อนหลังเกินหน้าต่างที่โหลดไว้ → โหลดประวัติเก่าเพิ่มตามต้องการ
-  // from === '' (ทั้งหมด) → โหลดประวัติทั้งหมด
-  useEffect(() => {
-    if (!loadRecordsSince) return;
-    const since = store.recordsSince;
-    if (!since) return; // โหลดครบทั้งหมดแล้ว
-    if (from === '' || from < since) loadRecordsSince(from || null);
-  }, [from, store.recordsSince, loadRecordsSince]);
+  // สาขาที่จะส่งให้ server: เลือกสาขาเดียวจาก dropdown > scope ของหน้า > ทุกสาขา
+  const effectiveBranchIds = useMemo(() => {
+    if (branchFilter !== 'all') return [branchFilter];
+    if (scopeBranchIds && scopeBranchIds.length) return scopeBranchIds;
+    return undefined;
+  }, [branchFilter, scopeBranchIds]);
+  const branchKey = effectiveBranchIds ? effectiveBranchIds.join(',') : '';
 
-  const scopedRecords = useMemo(() => {
-    if (mode === 'production') return records.filter(r => r.type === 'production');
-    if (mode === 'defect')     return records.filter(r => r.type === 'defect');
-    return records;
-  }, [records, mode]);
+  const reload = useCallback(async () => {
+    setLoadingRows(true);
+    try {
+      const res = await fetchRecords({
+        from: from || undefined, to: to || undefined,
+        branchIds: effectiveBranchIds,
+        type: mode === 'all' ? undefined : mode,
+      });
+      setRows(res.rows);
+      setTotal(res.total);
+    } catch (e) {
+      toast('โหลดข้อมูลไม่สำเร็จ: ' + e.message, 'bad');
+    } finally {
+      setLoadingRows(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [from, to, branchKey, mode]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const scopedRecords = rows;
+  const capped = total > rows.length; // ช่วงนี้มีมากกว่าที่ดึงมา (เพดาน 1000/ครั้ง)
 
   const filtered = useMemo(() => {
     return scopedRecords.filter(r => {
@@ -230,12 +250,9 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
         const hay = (r.id + ' ' + menu + ' ' + branch + ' ' + (r.reason || '') + ' ' + (r.producer || '') + ' ' + (r.tester || '') + ' ' + lots + ' ' + (r.note || '')).toLowerCase();
         if (!hay.includes(q.toLowerCase())) return false;
       }
-      if (from && r.date < from) return false;
-      if (to && r.date > to) return false;
-      if (showBranchFilter && branchFilter !== 'all' && r.branchId !== branchFilter) return false;
       return true;
     }).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
-  }, [scopedRecords, tab, q, from, to, branchFilter, store, showBranchFilter, mode]);
+  }, [scopedRecords, tab, q, store, mode]);
 
   const counts = useMemo(() => {
     if (mode === 'production') {
@@ -248,9 +265,9 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
     setDeleting(true);
     try {
       await deleteRecord(rec.id);
-      removeRecords(rec.id);
       toast(`ลบ ${rec.id} แล้ว`, 'ok');
       setDeleteTarget(null);
+      await reload();
     } catch (e) {
       toast('ลบไม่สำเร็จ: ' + e.message, 'bad');
     } finally {
@@ -263,9 +280,9 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
     try {
       const ids = filtered.map(r => r.id);
       await deleteRecords(ids);
-      removeRecords(ids);
       toast(`ลบ ${filtered.length} รายการแล้ว`, 'ok');
       setDeleteAllOpen(false);
+      await reload();
     } catch (e) {
       toast('ลบไม่สำเร็จ: ' + e.message, 'bad');
     } finally {
@@ -313,7 +330,7 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
           <div>
             <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em' }}>{sectionTitle}</h2>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>
-              <span className="num">{filtered.length}</span> รายการ · จากทั้งหมด <span className="num">{scopedRecords.length}</span>
+              <span className="num">{filtered.length}</span> รายการ · จากทั้งหมด <span className="num">{total}</span>
             </div>
           </div>
         </div>
@@ -378,10 +395,16 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
         </div>
       )}
 
-      {loadingMore && (
+      {loadingRows && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 12, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 13, color: 'var(--ink-3)' }}>
           <span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--line-2)', borderTopColor: 'var(--ink-3)', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
-          กำลังโหลดประวัติเก่าเพิ่ม...
+          กำลังโหลดข้อมูล...
+        </div>
+      )}
+      {capped && !loadingRows && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 12, background: 'color-mix(in oklch, var(--amber) 8%, white)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 13, color: 'var(--ink-2)' }}>
+          <Icon name="alert" size={14} style={{ color: 'var(--amber)', flexShrink: 0 }} />
+          ช่วงนี้มี {total.toLocaleString()} รายการ — โหลดมา {rows.length.toLocaleString()} รายการล่าสุด · แนะนำให้แคบช่วงวันที่ลงเพื่อดูครบ
         </div>
       )}
 
@@ -647,7 +670,7 @@ export function HistoryView({ records, store, sectionTitle, sectionIcon = 'histo
   );
 }
 
-export function SplitHistoryPage({ records, store, title, eyebrow, showBranch, showBranchFilter, refresh, branches }) {
+export function SplitHistoryPage({ scopeBranchIds, store, title, eyebrow, showBranch, showBranchFilter, refresh, branches }) {
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 28, gap: 20 }} className="fade-up">
@@ -657,16 +680,15 @@ export function SplitHistoryPage({ records, store, title, eyebrow, showBranch, s
           <div style={{ marginTop: 8, fontSize: 15, color: 'var(--ink-3)' }}>ประวัติการผลิต · ลบและ Export ได้</div>
         </div>
       </div>
-      <HistoryView mode="production" records={records} store={store}
+      <HistoryView mode="production" scopeBranchIds={scopeBranchIds} store={store}
         sectionTitle="ประวัติการผลิต" sectionIcon="factory"
         showBranch={showBranch} showBranchFilter={showBranchFilter} refresh={refresh} branches={branches} />
     </>
   );
 }
 
-export function DefectByMaterial({ records, store, showBranchFilter, branches }) {
+export function DefectByMaterial({ scopeBranchIds, store, showBranchFilter, branches }) {
   const toast = useToast();
-  const { loadRecordsSince, loadingMore } = useStore();
   const [q, setQ] = useState('');
   const [from, setFrom] = useState(() => todayISO());
   const [to, setTo] = useState(() => todayISO());
@@ -680,45 +702,26 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
     return () => window.removeEventListener('resize', handler);
   }, []);
 
-  // โหลดประวัติเก่าเพิ่มเมื่อเลือกช่วงวันที่ย้อนหลังเกินหน้าต่างที่โหลดไว้
-  useEffect(() => {
-    if (!loadRecordsSince) return;
-    const since = store.recordsSince;
-    if (!since) return;
-    if (from === '' || from < since) loadRecordsSince(from || null);
-  }, [from, store.recordsSince, loadRecordsSince]);
+  const effectiveBranchIds = useMemo(() => {
+    if (showBranchFilter && branchFilter !== 'all') return [branchFilter];
+    if (scopeBranchIds && scopeBranchIds.length) return scopeBranchIds;
+    return undefined;
+  }, [showBranchFilter, branchFilter, scopeBranchIds]);
 
-  const filteredRecs = useMemo(() => records.filter(r => {
-    if (from && r.date < from) return false;
-    if (to && r.date > to) return false;
-    if (showBranchFilter && branchFilter !== 'all' && r.branchId !== branchFilter) return false;
-    return true;
-  }), [records, from, to, branchFilter, showBranchFilter]);
+  // ดึงผลสรุป "เสียหายรายวัตถุดิบ" จากเซิร์ฟเวอร์ (RPC) + KPI ของเสีย (จำนวน/กรัมรวม)
+  const { kpi, material, loading } = useDashboard(from || '1900-01-01', to || todayISO(), effectiveBranchIds, { material: true });
 
   const breakdown = useMemo(() => {
-    const map = {};
-    filteredRecs.forEach(r => {
-      const menu = store.menus.find(m => m.id === r.menuId);
-      if (!menu) return;
-      const bom = store.bomDefect?.[menu.id] || [];
-      const grams = r.qty || 0;
-      bom.forEach(b => {
-        const used = grams * b.qty;
-        if (!map[b.code]) {
-          const ing = store.ingredients.find(i => i.code === b.code);
-          map[b.code] = { code: b.code, name: ing?.name || b.code, unit: ing?.unit || '', qty: 0, occurrences: 0, totalGrams: 0 };
-        }
-        map[b.code].qty += used;
-        map[b.code].occurrences += 1;
-        map[b.code].totalGrams += grams;
-      });
+    let rows = (material || []).map(m => {
+      const ing = store.ingredients.find(i => i.code === m.code);
+      return { code: m.code, name: ing?.name || m.code, unit: ing?.unit || '', qty: m.qty, occurrences: m.occurrences, totalGrams: m.totalGrams };
     });
-    let rows = Object.values(map);
     if (q) { const ql = q.toLowerCase(); rows = rows.filter(x => (x.code + ' ' + x.name).toLowerCase().includes(ql)); }
     return rows.sort((a, b) => b.qty - a.qty);
-  }, [filteredRecs, store, q]);
+  }, [material, store, q]);
 
-  const totalGrams = filteredRecs.reduce((s, r) => s + (r.qty || 0), 0);
+  const totalGrams = kpi.defectQty;
+  const defectCount = kpi.defect;
 
   const onExport = () => {
     const head = ['รหัสสินค้า', 'ชื่อวัตถุดิบ', 'ปริมาณรวม', 'หน่วย', 'จำนวนครั้งที่เกี่ยวข้อง', 'รวมกรัมเบส'];
@@ -741,7 +744,7 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
           <div>
             <h2 className="font-display" style={{ margin: 0, fontSize: 20, fontWeight: 600, letterSpacing: '-0.01em' }}>เสียหายรายวัตถุดิบ</h2>
             <div style={{ fontSize: 13, color: 'var(--ink-3)', marginTop: 2 }}>
-              <span className="num">{breakdown.length}</span> วัตถุดิบ · <span className="num">{filteredRecs.length}</span> ครั้ง · <span className="num">{fmtNum(totalGrams)}</span> กรัม
+              <span className="num">{breakdown.length}</span> วัตถุดิบ · <span className="num">{defectCount}</span> ครั้ง · <span className="num">{fmtNum(totalGrams)}</span> กรัม
             </div>
           </div>
         </div>
@@ -781,10 +784,10 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
         </div>
       )}
 
-      {loadingMore && (
+      {loading && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 12, background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: 10, fontSize: 13, color: 'var(--ink-3)' }}>
           <span style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--line-2)', borderTopColor: 'var(--ink-3)', animation: 'spin 0.7s linear infinite', flexShrink: 0 }} />
-          กำลังโหลดประวัติเก่าเพิ่ม...
+          กำลังโหลดข้อมูล...
         </div>
       )}
 
@@ -852,10 +855,9 @@ export function DefectByMaterial({ records, store, showBranchFilter, branches })
   );
 }
 
-export function DefectHistoryPage({ records, store, title, eyebrow, showBranch = true, showBranchFilter = false, refresh, branches }) {
+export function DefectHistoryPage({ scopeBranchIds, store, title, eyebrow, showBranch = true, showBranchFilter = false, refresh, branches }) {
   const [view, setView] = useState('menu');
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 640);
-  const defectRecords = useMemo(() => records.filter(r => r.type === 'defect'), [records]);
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 640);
@@ -897,12 +899,12 @@ export function DefectHistoryPage({ records, store, title, eyebrow, showBranch =
       </div>
 
       {view === 'menu' && (
-        <HistoryView mode="defect" records={records} store={store}
+        <HistoryView mode="defect" scopeBranchIds={scopeBranchIds} store={store}
           sectionTitle="ประวัติเสียหายปริมาณเบส (กรัม)" sectionIcon="alert"
           showBranch={showBranch} showBranchFilter={showBranchFilter} refresh={refresh} branches={branches} />
       )}
       {view === 'material' && (
-        <DefectByMaterial records={defectRecords} store={store} showBranchFilter={showBranchFilter} branches={branches} />
+        <DefectByMaterial scopeBranchIds={scopeBranchIds} store={store} showBranchFilter={showBranchFilter} branches={branches} />
       )}
     </>
   );
