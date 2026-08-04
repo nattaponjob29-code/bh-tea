@@ -265,7 +265,7 @@ export function StockReportPage({ scopeBranchIds, store, showBranch = false }) {
         </div>
       </div>
 
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card stock-report" style={{ overflow: 'hidden' }}>
         {loading ? (
           <div style={{ textAlign: 'center', padding: 40, color: 'var(--ink-3)' }}>กำลังโหลด...</div>
         ) : view.length === 0 ? (
@@ -287,10 +287,16 @@ export function StockReportPage({ scopeBranchIds, store, showBranch = false }) {
                       <td>{fmtDateTH(r.date)}</td>
                       <td>{r.cycle ? <span className="num" style={{ background: CYCLE_COLOR[r.cycle], color: '#fff', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 999 }}>{CYCLE_LABEL[r.cycle]}</span> : '—'}</td>
                       {showBranch && <td>{branchName(r.branchId)}</td>}
-                      <td><div style={{ fontWeight: 500 }}>{it?.name || r.code}</div><div className="font-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>{r.code}</div></td>
+                      <td>
+                        <div style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span>{it?.name || r.code}</span>
+                          {it?.count_tag && <span className="num" style={{ background: TAG_COLOR[it.count_tag], color: '#fff', fontSize: 9.5, fontWeight: 600, padding: '1px 7px', borderRadius: 999 }}>{COUNT_TAGS[it.count_tag]}</span>}
+                        </div>
+                        <div className="font-mono" style={{ fontSize: 10.5, color: 'var(--ink-3)' }}>{r.code}</div>
+                      </td>
                       <td className="num" style={{ textAlign: 'right', color: 'var(--ink-3)' }}>{r.prev == null ? '—' : fmtNum(r.prev)}</td>
                       <td className="num" style={{ textAlign: 'right' }}>{fmtNum(r.counted)} <span style={{ fontSize: 11, color: 'var(--ink-3)' }}>{it?.unit || ''}</span></td>
-                      <td style={{ textAlign: 'right' }}><Variance v={d} unit={it?.unit || ''} /></td>
+                      <td style={{ textAlign: 'right' }}>{d == null ? <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>ครั้งแรก</span> : <Variance v={d} unit={it?.unit || ''} />}</td>
                       <td style={{ color: 'var(--ink-3)' }}>{r.counter || '—'}</td>
                     </tr>
                   );

@@ -136,6 +136,16 @@ table.t tr:last-child td { border-bottom: none; }
 table.t tbody tr { transition: background var(--t-fast); }
 table.t tbody tr:hover { background: rgba(201,138,60,.06); }
 
+/* ตารางรายงานตรวจนับ — กระชับ อ่านง่ายบนมือถือ */
+.stock-report table.t { font-size: 13px; }
+.stock-report table.t th { padding: 9px 10px; font-size: 10px; }
+.stock-report table.t td { padding: 9px 10px; }
+@media (max-width: 640px) {
+  .stock-report table.t { font-size: 11px; }
+  .stock-report table.t th { padding: 6px 7px; font-size: 9px; letter-spacing: .03em; }
+  .stock-report table.t td { padding: 6px 7px; }
+}
+
 @keyframes fadeUp  { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fadeIn  { from { opacity: 0; } to { opacity: 1; } }
 @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
