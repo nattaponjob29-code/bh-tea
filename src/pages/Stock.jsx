@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { PageHeader, Icon, Empty, useToast } from '../components/ui.jsx';
+import { PageHeader, Icon, Empty, useToast, SearchBox } from '../components/ui.jsx';
+import { DateQuickPresets } from '../components/History.jsx';
 import { COUNT_TAGS } from '../lib/constants.js';
 import { todayISO, fmtNum, fmtDateTH } from '../lib/helpers.js';
 import { fetchLastCounts, fetchCountsForDate, saveStockCounts, fetchStockHistory } from '../lib/db.js';
@@ -242,22 +243,24 @@ export function StockReportPage({ scopeBranchIds, store, showBranch = false }) {
       <PageHeader eyebrow="Report" title="รายงานการตรวจนับ" subtitle="ย้อนดูประวัติ · ค้นหาวัตถุดิบ · กรอง Tag / วันที่ / จัดเรียง" />
 
       <div className="card stock-filters" style={{ padding: '14px 16px', marginBottom: 16 }}>
-        <div className="fgrid">
-          <label className="field date"><span>ตั้งแต่วันที่</span><input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} /></label>
-          <label className="field date"><span>ถึงวันที่</span><input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} /></label>
-          <label className="field"><span>Tag รอบ</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <SearchBox value={q} onChange={setQ} placeholder="ค้นหาชื่อ หรือรหัสวัตถุดิบ..." />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8 }}>
+            <input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} style={{ fontSize: 13, padding: '8px 8px' }} />
+            <input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} style={{ fontSize: 13, padding: '8px 8px' }} />
+            <DateQuickPresets setFrom={setFrom} setTo={setTo} compact />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <select className="inp" value={tag} onChange={e => setTag(e.target.value)}>
               <option value="all">ทุก Tag</option>
               {Object.entries(COUNT_TAGS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-            </select></label>
-          <label className="field"><span>จัดเรียง</span>
+            </select>
             <select className="inp" value={sort} onChange={e => setSort(e.target.value)}>
               <option value="date">ล่าสุดก่อน</option>
               <option value="name">ตามรายชื่อ (ก → ฮ)</option>
               <option value="qty">จำนวนที่นับ (มาก → น้อย)</option>
-            </select></label>
-          <label className="field search"><span>ค้นหาวัตถุดิบ</span>
-            <input className="inp" value={q} onChange={e => setQ(e.target.value)} placeholder="พิมพ์ชื่อ หรือรหัส เช่น ไข่มุก / RM-00179" /></label>
+            </select>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 11, fontSize: 12.5, color: 'var(--ink-2)' }}>
           <span>พบ <b className="num">{view.length}</b> รายการ</span>
