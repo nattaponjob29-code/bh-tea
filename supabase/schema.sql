@@ -33,6 +33,7 @@ create table if not exists ingredients (
   code      text primary key,      -- e.g. RM001
   name      text not null,
   unit      text not null,
+  count_tag text check (count_tag in ('daily', 'weekly', 'monthly', 'consumable')), -- Tag รอบตรวจนับสต็อก
   created_at timestamptz default now()
 );
 

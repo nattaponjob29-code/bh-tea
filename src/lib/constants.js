@@ -12,6 +12,9 @@ export const ROLE_OPTIONS = ['Branch', 'Area', 'QC', 'Admin', 'Test'];
 export const ROLE_TH = { Branch: 'พนักงานสาขา', Area: 'Area Manager', QC: 'QC', Admin: 'ผู้ดูแลระบบ', Test: 'ทดสอบ' };
 export const ROLE_COLOR = { Branch: 'var(--amber)', Area: 'var(--matcha)', QC: 'var(--info)', Admin: 'var(--tea)', Test: 'var(--ink-3)' };
 
+// Tag รอบตรวจนับสต็อกของวัตถุดิบ (ใช้กำหนดว่าให้ตรวจนับถี่แค่ไหน)
+export const COUNT_TAGS = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', consumable: 'วัสดุสิ้นเปลือง' };
+
 export const ROLE_DEFS = {
   Branch: { roleLabel: 'พนักงานสาขา', color: 'var(--amber)', icon: 'store' },
   Area:   { roleLabel: 'Area Manager', color: 'var(--matcha)', icon: 'shield' },

@@ -9,7 +9,7 @@ import {
   fetchRecordStats, branchRecordCounts,
 } from '../lib/db.js';
 import { useDashboard, dailySeries, dateRangeDays } from '../lib/useDashboard.js';
-import { ROLE_OPTIONS, ROLE_TH, ROLE_COLOR } from '../lib/constants.js';
+import { ROLE_OPTIONS, ROLE_TH, ROLE_COLOR, COUNT_TAGS } from '../lib/constants.js';
 import { todayISO, fmtNum } from '../lib/helpers.js';
 
 /* ---------- Shared helper: call admin API routes ---------- */
@@ -388,29 +388,98 @@ function AdminMenus({ store, refresh }) {
   );
 }
 
+// รับค่า Tag ได้ทั้ง key อังกฤษ และคำไทย
+const TAG_ALIAS = {
+  daily: 'daily', weekly: 'weekly', monthly: 'monthly', consumable: 'consumable',
+  'วัสดุสิ้นเปลือง': 'consumable', 'รายวัน': 'daily', 'รายสัปดาห์': 'weekly', 'รายเดือน': 'monthly',
+};
+
+// แปลงไฟล์ CSV → รายการวัตถุดิบ พร้อมตรวจความถูกต้องต่อแถว (ใช้ในนำเข้าหลายรายการ)
+function parseIngredientsCSV(text, existing) {
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const existingCodes = new Set((existing || []).map(i => i.code));
+  const seen = new Set();
+  const rows = [];
+  text.split(/\r?\n/).forEach(line => {
+    const raw = line.trim();
+    if (!raw || raw.startsWith('#')) return;
+    const cells = splitCSVRow(raw).map(c => c.trim());
+    if (/^(รหัส|code)/i.test(cells[0] || '')) return; // ข้ามหัวตาราง
+    const code = (cells[0] || '').toUpperCase();
+    const name = cells[1] || '';
+    const unit = cells[2] || '';
+    const tagRaw = cells[3] || '';
+    const tag = tagRaw ? (TAG_ALIAS[tagRaw.toLowerCase()] || TAG_ALIAS[tagRaw] || null) : '';
+    let err = null, note = null;
+    if (!code || !name || !unit) err = 'ข้อมูลไม่ครบ';
+    else if (seen.has(code)) err = 'รหัสซ้ำในไฟล์';
+    else if (tagRaw && !tag) err = 'Tag ไม่ถูกต้อง';
+    else if (existingCodes.has(code)) note = 'เขียนทับของเดิม';
+    if (!err) seen.add(code);
+    rows.push({ code, name, unit, tag, tagRaw, err, note });
+  });
+  return rows;
+}
+
 /* ---------- Materials CRUD ---------- */
 function AdminMaterials({ store, refresh }) {
   const toast = useToast();
   const [openAdd, setOpenAdd] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ code: '', name: '', unit: '' });
+  const [form, setForm] = useState({ code: '', name: '', unit: '', count_tag: '' });
   const [q, setQ] = useState('');
   const [saving, setSaving] = useState(false);
+  const [openBulk, setOpenBulk] = useState(false);
+  const [bulkRows, setBulkRows] = useState(null);
+  const [fileName, setFileName] = useState('');
+  const [drag, setDrag] = useState(false);
+
+  const handleFile = (file) => {
+    if (!file) return;
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => { try { setBulkRows(parseIngredientsCSV(String(reader.result), store.ingredients)); } catch { setBulkRows([]); } };
+    reader.readAsText(file);
+  };
+  const downloadTemplate = () => {
+    const csv = '﻿' + 'รหัสสินค้า,ชื่อวัตถุดิบ,หน่วย,Tag\n'
+      + 'RM-00401,ผงชาไทยสูตรพิเศษ,กก.,weekly\n'
+      + 'RM-00402,ครีมเทียมข้น,ถุง,daily\n'
+      + 'RM-00403,แก้วพลาสติก 22oz,ใบ,consumable\n';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'template-วัตถุดิบ.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+  const closeBulk = () => { setOpenBulk(false); setBulkRows(null); setFileName(''); setDrag(false); };
+  const submitBulk = async () => {
+    const valid = (bulkRows || []).filter(r => !r.err);
+    if (!valid.length) return toast('ไม่มีรายการที่ถูกต้องให้นำเข้า', 'bad');
+    setSaving(true);
+    let ok = 0, fail = 0;
+    for (const r of valid) {
+      try { await saveIngredient({ code: r.code, name: r.name, unit: r.unit, count_tag: r.tag || null }); ok++; }
+      catch { fail++; }
+    }
+    await refresh();
+    toast(`นำเข้า ${ok} รายการ${fail ? ` (ล้มเหลว ${fail})` : ''}`, ok > 0 ? 'ok' : 'bad');
+    closeBulk(); setSaving(false);
+  };
 
   const submit = async () => {
     if (!form.code || !form.name || !form.unit) return toast('กรอกให้ครบ', 'bad');
     if (!editing && store.ingredients.find(i => i.code === form.code)) return toast('รหัสซ้ำ', 'bad');
     setSaving(true);
     try {
-      await saveIngredient({ code: form.code, name: form.name, unit: form.unit });
+      await saveIngredient({ code: form.code, name: form.name, unit: form.unit, count_tag: form.count_tag || null });
       await refresh();
       toast(editing ? 'แก้ไขแล้ว' : 'เพิ่มวัตถุดิบแล้ว', 'ok');
-      setOpenAdd(false); setEditing(null); setForm({ code: '', name: '', unit: '' });
+      setOpenAdd(false); setEditing(null); setForm({ code: '', name: '', unit: '', count_tag: '' });
     } catch (e) { toast(e.message, 'bad'); }
     finally { setSaving(false); }
   };
 
-  const onEdit = (i) => { setEditing(i.code); setForm(i); setOpenAdd(true); };
+  const onEdit = (i) => { setEditing(i.code); setForm({ code: i.code, name: i.name, unit: i.unit, count_tag: i.count_tag || '' }); setOpenAdd(true); };
   const onDelete = async (code) => {
     if (!window.confirm('ลบวัตถุดิบนี้?')) return;
     try { await deleteIngredient(code); await refresh(); toast('ลบเรียบร้อย', 'ok'); }
@@ -433,20 +502,26 @@ function AdminMaterials({ store, refresh }) {
     <>
       <PageHeader
         eyebrow="Master Data" title="วัตถุดิบ" subtitle={`มี ${store.ingredients.length} รายการ · รหัสสินค้า · ชื่อ · หน่วย`}
-        right={<button className="btn amber" onClick={() => { setEditing(null); setForm({ code: '', name: '', unit: '' }); setOpenAdd(true); }}><Icon name="plus" size={14} /> เพิ่มวัตถุดิบ</button>}
+        right={
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn ghost" onClick={() => { setBulkRows(null); setFileName(''); setOpenBulk(true); }}><Icon name="box" size={14} /> นำเข้าหลายรายการ</button>
+            <button className="btn amber" onClick={() => { setEditing(null); setForm({ code: '', name: '', unit: '' }); setOpenAdd(true); }}><Icon name="plus" size={14} /> เพิ่มวัตถุดิบ</button>
+          </div>
+        }
       />
       <div style={{ maxWidth: 380, marginBottom: 16 }}>
         <SearchBox value={q} onChange={setQ} placeholder="ค้นหารหัส หรือชื่อวัตถุดิบ..." />
       </div>
       <div className="card" style={{ overflow: 'hidden' }}>
         <table className="t">
-          <thead><tr><th>รหัสสินค้า</th><th>ชื่อวัตถุดิบ</th><th>หน่วย</th><th style={{ textAlign: 'right' }}>ใช้ในเมนู</th><th style={{ width: 120 }}></th></tr></thead>
+          <thead><tr><th>รหัสสินค้า</th><th>ชื่อวัตถุดิบ</th><th>หน่วย</th><th>Tag</th><th style={{ textAlign: 'right' }}>ใช้ในเมนู</th><th style={{ width: 120 }}></th></tr></thead>
           <tbody>
             {filtered.map(i => (
               <tr key={i.code}>
                 <td className="font-mono" style={{ fontSize: 13, color: 'var(--ink)' }}>{i.code}</td>
                 <td style={{ fontWeight: 500 }}>{i.name}</td>
                 <td><span className="badge">{i.unit}</span></td>
+                <td>{i.count_tag ? <span className="badge info">{COUNT_TAGS[i.count_tag]}</span> : <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
                 <td className="num" style={{ textAlign: 'right' }}>{usage[i.code] || 0} เมนู</td>
                 <td style={{ textAlign: 'right' }}>
                   <button className="btn ghost sm" onClick={() => onEdit(i)} style={{ marginRight: 6 }}><Icon name="edit" size={12} /></button>
@@ -463,6 +538,80 @@ function AdminMaterials({ store, refresh }) {
           <label className="field"><span>รหัสสินค้า</span><input className="inp" value={form.code} onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="RM015" disabled={!!editing} /></label>
           <label className="field"><span>หน่วย</span><input className="inp" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="กรัม / มล." /></label>
           <label className="field" style={{ gridColumn: '1/-1' }}><span>ชื่อวัตถุดิบ</span><input className="inp" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></label>
+          <label className="field" style={{ gridColumn: '1/-1' }}>
+            <span>Tag รอบตรวจนับ</span>
+            <select className="inp" value={form.count_tag} onChange={e => setForm({ ...form, count_tag: e.target.value })}>
+              <option value="">— ไม่ระบุ —</option>
+              {Object.entries(COUNT_TAGS).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            </select>
+          </label>
+        </div>
+      </Modal>
+
+      <Modal open={openBulk} onClose={closeBulk} title="นำเข้าวัตถุดิบหลายรายการ" width={640}
+        footer={<>
+          <button className="btn ghost" onClick={closeBulk}>ยกเลิก</button>
+          <button className="btn amber" onClick={submitBulk} disabled={saving || !(bulkRows || []).some(r => !r.err)}>
+            <Icon name="check" size={14} /> {saving ? 'กำลังนำเข้า...' : `นำเข้า ${(bulkRows || []).filter(r => !r.err).length} รายการ`}
+          </button>
+        </>}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <button className="btn ghost sm" onClick={downloadTemplate}><Icon name="arrow-down" size={13} /> ดาวน์โหลด Template (.csv)</button>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-3)' }}>คอลัมน์: รหัสสินค้า · ชื่อวัตถุดิบ · หน่วย · Tag</span>
+          </div>
+
+          <label
+            onDragOver={e => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={e => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files[0]); }}
+            style={{
+              display: 'block', textAlign: 'center', cursor: 'pointer', padding: '22px 18px', borderRadius: 12,
+              border: `1.5px dashed ${drag ? 'var(--amber)' : 'var(--line-2)'}`, background: drag ? 'rgba(201,138,60,.08)' : 'var(--bg)',
+            }}>
+            <input type="file" accept=".csv,text/csv" hidden onChange={e => handleFile(e.target.files[0])} />
+            <div style={{ fontSize: 22, color: 'var(--ink-3)' }}>⬆</div>
+            <div style={{ marginTop: 4, fontSize: 14 }}><b>ลากไฟล์มาวาง</b> หรือ <span style={{ color: 'var(--amber)', fontWeight: 600, textDecoration: 'underline' }}>เลือกไฟล์</span></div>
+            <div style={{ fontSize: 12, color: 'var(--ink-3)', marginTop: 2 }}>{fileName ? `ไฟล์: ${fileName}` : 'รองรับ .csv (ถ้าเป็น Excel เลือก Save As CSV)'}</div>
+          </label>
+
+          {bulkRows && (bulkRows.length === 0
+            ? <div style={{ fontSize: 13, color: 'var(--ink-3)', textAlign: 'center' }}>ไม่พบข้อมูลในไฟล์</div>
+            : (
+              <div>
+                <div style={{ display: 'flex', gap: 16, fontSize: 13, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <span>พบ <b className="num">{bulkRows.length}</b> รายการ</span>
+                  <span>ใช้ได้ <b className="num" style={{ color: 'var(--ok)' }}>{bulkRows.filter(r => !r.err).length}</b></span>
+                  <span>มีปัญหา <b className="num" style={{ color: 'var(--bad)' }}>{bulkRows.filter(r => r.err).length}</b></span>
+                </div>
+                <div style={{ maxHeight: 250, overflow: 'auto', border: '1px solid var(--line)', borderRadius: 10 }}>
+                  <table className="t">
+                    <thead><tr><th>รหัส</th><th>ชื่อ</th><th>หน่วย</th><th>Tag</th><th>สถานะ</th></tr></thead>
+                    <tbody>
+                      {bulkRows.map((r, i) => (
+                        <tr key={i} style={{ background: r.err ? 'rgba(176,70,52,.05)' : undefined }}>
+                          <td className="font-mono" style={{ fontSize: 12.5 }}>{r.code || '—'}</td>
+                          <td>{r.name || <span style={{ color: 'var(--bad)' }}>(ว่าง)</span>}</td>
+                          <td>{r.unit || '—'}</td>
+                          <td>{r.tag ? COUNT_TAGS[r.tag] : (r.tagRaw ? <span style={{ color: 'var(--bad)' }}>{r.tagRaw}</span> : <span style={{ color: 'var(--ink-3)' }}>—</span>)}</td>
+                          <td>
+                            {r.err
+                              ? <span className="badge bad"><span className="dot" />{r.err}</span>
+                              : r.note
+                                ? <span className="badge warn"><span className="dot" />{r.note}</span>
+                                : <span className="badge ok"><span className="dot" />พร้อมนำเข้า</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+
+          <div style={{ fontSize: 12.5, color: 'var(--ink-2)', background: 'var(--bg)', border: '1px dashed var(--line-2)', borderRadius: 10, padding: '10px 12px', lineHeight: 1.7 }}>
+            แถวแรกเป็นหัวตาราง · แต่ละแถว = <code style={{ fontFamily: 'monospace' }}>รหัสสินค้า, ชื่อวัตถุดิบ, หน่วย, Tag</code> · Tag ใช้ได้: <code style={{ fontFamily: 'monospace' }}>daily / weekly / monthly / consumable</code> (เว้นว่างได้) · รหัสซ้ำจะเขียนทับ · แถวที่มีปัญหาจะถูกข้าม
+          </div>
         </div>
       </Modal>
     </>
