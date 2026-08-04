@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PageHeader, Icon, Empty, useToast, SearchBox } from '../components/ui.jsx';
 import { DateQuickPresets } from '../components/History.jsx';
 import { COUNT_TAGS } from '../lib/constants.js';
@@ -36,6 +36,7 @@ export function StockCountPage({ user, store }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastDraft, setLastDraft] = useState(null);
+  const inputsRef = useRef({}); // { code: <input> } สำหรับกด "ถัดไป" ข้ามช่อง
 
   const cycle = cycleForDate(date);
   const tags = CYCLE_TAGS[cycle];
@@ -59,7 +60,8 @@ export function StockCountPage({ user, store }) {
       setPrevs(prevMap);
       const c = {};
       let draft = false;
-      todayRows.forEach(r => { c[r.ingredient_code] = String(r.counted_qty); if (r.status === 'draft') draft = true; });
+      // เติมค่ากลับเฉพาะ "แบบร่าง" — ผลที่บันทึกจริงแล้ว (final) ถือว่าปิดรอบ ไม่เอามาแก้ต่อ
+      todayRows.forEach(r => { if (r.status === 'draft') { c[r.ingredient_code] = String(r.counted_qty); draft = true; } });
       setCounts(c);
       setLastDraft(draft ? 'มีแบบร่างค้างไว้ของวันนี้' : null);
     } catch (e) { toast(e.message, 'bad'); }
@@ -76,6 +78,16 @@ export function StockCountPage({ user, store }) {
 
   const doneCount = allItems.filter(i => counts[i.code] !== '' && counts[i.code] !== undefined).length;
 
+  // Enter / ปุ่ม "ถัดไป" บนคีย์บอร์ด → ไปช่องถัดไป
+  const onKey = (e, code) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const idx = allItems.findIndex(i => i.code === code);
+    const next = allItems[idx + 1];
+    if (next && inputsRef.current[next.code]) inputsRef.current[next.code].focus();
+    else e.target.blur();
+  };
+
   const save = async (status) => {
     const rows = allItems
       .filter(i => counts[i.code] !== '' && counts[i.code] !== undefined && !isNaN(parseFloat(counts[i.code])))
@@ -90,7 +102,10 @@ export function StockCountPage({ user, store }) {
     try {
       await saveStockCounts(rows, status);
       if (status === 'draft') { toast(`บันทึกแบบร่างแล้ว (${rows.length} รายการ)`, 'ok'); setLastDraft('บันทึกแบบร่างล่าสุดเมื่อครู่'); }
-      else toast(`บันทึกผลตรวจนับแล้ว (${rows.length} รายการ${rows.length < allItems.length ? ` · ยังไม่ครบ ${allItems.length - rows.length}` : ''})`, 'ok');
+      else {
+        toast(`บันทึกผลตรวจนับแล้ว (${rows.length} รายการ${rows.length < allItems.length ? ` · ยังไม่ครบ ${allItems.length - rows.length}` : ''})`, 'ok');
+        setCounts({}); setLastDraft(null); // เคลียร์ช่องหลังบันทึกจริง
+      }
     } catch (e) { toast(e.message, 'bad'); }
     finally { setSaving(false); }
   };
@@ -166,7 +181,9 @@ export function StockCountPage({ user, store }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 11 }}>
                         <button className="btn ghost" onClick={() => step(it.code, -1)} style={{ width: 46, height: 46, padding: 0, justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>−</button>
                         <div style={{ flex: 1, position: 'relative' }}>
-                          <input className="inp num" inputMode="decimal" value={raw ?? ''} onChange={e => setVal(it.code, e.target.value)}
+                          <input className="inp num" inputMode="decimal" enterKeyHint="next"
+                            ref={el => { if (el) inputsRef.current[it.code] = el; }}
+                            value={raw ?? ''} onChange={e => setVal(it.code, e.target.value)} onKeyDown={e => onKey(e, it.code)}
                             placeholder="นับจริง" style={{ textAlign: 'center', fontSize: 20, fontWeight: 600, padding: '12px 40px 12px 12px', height: 46 }} />
                           <span style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--ink-3)' }}>{it.unit}</span>
                         </div>
