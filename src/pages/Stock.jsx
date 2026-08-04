@@ -241,8 +241,8 @@ export function StockReportPage({ scopeBranchIds, store, showBranch = false }) {
     <>
       <PageHeader eyebrow="Report" title="รายงานการตรวจนับ" subtitle="ย้อนดูประวัติ · ค้นหาวัตถุดิบ · กรอง Tag / วันที่ / จัดเรียง" />
 
-      <div className="card" style={{ padding: '18px 20px', marginBottom: 18 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+      <div className="card stock-filters" style={{ padding: '14px 16px', marginBottom: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(118px, 1fr))', gap: 10 }}>
           <label className="field"><span>ตั้งแต่วันที่</span><input type="date" className="inp" value={from} onChange={e => setFrom(e.target.value)} /></label>
           <label className="field"><span>ถึงวันที่</span><input type="date" className="inp" value={to} onChange={e => setTo(e.target.value)} /></label>
           <label className="field"><span>Tag รอบ</span>
@@ -259,7 +259,7 @@ export function StockReportPage({ scopeBranchIds, store, showBranch = false }) {
           <label className="field" style={{ gridColumn: '1/-1' }}><span>ค้นหาวัตถุดิบ</span>
             <input className="inp" value={q} onChange={e => setQ(e.target.value)} placeholder="พิมพ์ชื่อ หรือรหัส เช่น ไข่มุก / RM-00179" /></label>
         </div>
-        <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 14, fontSize: 13, color: 'var(--ink-2)' }}>
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 11, fontSize: 12.5, color: 'var(--ink-2)' }}>
           <span>พบ <b className="num">{view.length}</b> รายการ</span>
           <span>รวมส่วนต่างสุทธิ <b className="num" style={{ color: net < 0 ? 'var(--bad)' : net > 0 ? 'var(--ok)' : 'var(--ink-3)' }}>{net > 0 ? '+' : ''}{fmtNum(net)}</b></span>
         </div>

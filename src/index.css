@@ -136,6 +136,14 @@ table.t tr:last-child td { border-bottom: none; }
 table.t tbody tr { transition: background var(--t-fast); }
 table.t tbody tr:hover { background: rgba(201,138,60,.06); }
 
+/* ตัวกรองรายงานตรวจนับ — กระชับบนมือถือ */
+.stock-filters .field > span { font-size: 10px; margin-bottom: 3px; }
+.stock-filters .inp { padding: 8px 10px; font-size: 13px; }
+@media (max-width: 640px) {
+  .stock-filters .field > span { font-size: 9.5px; }
+  .stock-filters .inp { padding: 7px 8px; font-size: 12.5px; }
+}
+
 /* ตารางรายงานตรวจนับ — กระชับ อ่านง่ายบนมือถือ */
 .stock-report table.t { font-size: 13px; }
 .stock-report table.t th { padding: 9px 10px; font-size: 10px; }
