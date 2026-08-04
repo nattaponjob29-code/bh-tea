@@ -181,3 +181,25 @@ create policy "admin update any profile" on profiles
 
 -- profiles: service role insert/update (for api/create-user.js)
 -- These are handled by service_role key in the API — no additional RLS needed.
+
+-- ── Stock counts (ตรวจนับสต็อก) — ดู supabase/add_stock_counts.sql ─────────────
+create table if not exists stock_counts (
+  id              uuid primary key default gen_random_uuid(),
+  branch_id       text references branches(id) on delete cascade,
+  date            date not null,
+  cycle           text check (cycle in ('daily', 'weekly', 'monthly')),
+  ingredient_code text references ingredients(code) on delete cascade,
+  counted_qty     numeric not null,
+  prev_qty        numeric,
+  counter         text,
+  note            text,
+  status          text not null default 'final' check (status in ('draft', 'final')),
+  by_user         text,
+  created_at      timestamptz default now(),
+  unique (branch_id, date, ingredient_code)
+);
+alter table stock_counts enable row level security;
+create policy "auth read stock_counts"   on stock_counts for select using (auth.role() = 'authenticated');
+create policy "auth insert stock_counts" on stock_counts for insert with check (auth.role() = 'authenticated');
+create policy "auth update stock_counts" on stock_counts for update using (auth.role() = 'authenticated');
+create policy "auth delete stock_counts" on stock_counts for delete using (auth.role() = 'authenticated');

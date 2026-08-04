@@ -212,6 +212,64 @@ export async function deleteRecords(ids) {
   if (error) throw new Error(error.message);
 }
 
+// ─── Stock counts (ตรวจนับสต็อก) ──────────────────────────────────────────────
+// หมายเหตุ: ฟังก์ชันกลุ่มนี้ "ไม่" เช็ก TEST_MODE — role Test เขียนตาราง stock_counts ได้
+// (แต่ยังเขียน records/master data ไม่ได้) เพื่อให้ทดสอบฟีเจอร์ได้ครบรวมหน้ารายงาน
+
+// ยอดนับล่าสุดก่อนวันที่กำหนด ต่อวัตถุดิบ (status final) → { code: qty } ใช้โชว์ "ครั้งก่อน"
+export async function fetchLastCounts(branchId, beforeDate) {
+  let q = supabase.from('stock_counts')
+    .select('ingredient_code, counted_qty, date')
+    .eq('branch_id', branchId).eq('status', 'final')
+    .order('date', { ascending: false }).limit(3000);
+  if (beforeDate) q = q.lt('date', beforeDate);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const map = {};
+  (data || []).forEach(r => { if (!(r.ingredient_code in map)) map[r.ingredient_code] = +r.counted_qty || 0; });
+  return map;
+}
+
+// แถวที่บันทึกไว้ของวันนั้น (ทั้ง draft/final) → ไว้โหลดมานับต่อ
+export async function fetchCountsForDate(branchId, date) {
+  const { data, error } = await supabase.from('stock_counts')
+    .select('ingredient_code, counted_qty, status')
+    .eq('branch_id', branchId).eq('date', date);
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+// บันทึกผลตรวจนับ (upsert ตาม branch+date+ingredient) — status: 'draft' | 'final'
+export async function saveStockCounts(rows, status) {
+  if (!rows || !rows.length) return;
+  const payload = rows.map(r => ({
+    branch_id: r.branchId, date: r.date, cycle: r.cycle,
+    ingredient_code: r.code, counted_qty: r.countedQty,
+    prev_qty: r.prevQty ?? null, counter: r.counter || null,
+    note: r.note || null, status, by_user: r.by || null,
+  }));
+  const { error } = await supabase.from('stock_counts')
+    .upsert(payload, { onConflict: 'branch_id,date,ingredient_code' });
+  if (error) throw new Error(error.message);
+}
+
+// ประวัติสำหรับหน้ารายงาน (เฉพาะ final)
+export async function fetchStockHistory({ from, to, branchIds } = {}) {
+  let q = supabase.from('stock_counts').select('*').eq('status', 'final');
+  if (from) q = q.gte('date', from);
+  if (to)   q = q.lte('date', to);
+  if (branchIds && branchIds.length) q = q.in('branch_id', branchIds);
+  q = q.order('date', { ascending: false }).order('created_at', { ascending: false }).limit(3000);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data || []).map(r => ({
+    id: r.id, branchId: r.branch_id, date: r.date, cycle: r.cycle,
+    code: r.ingredient_code, counted: +r.counted_qty || 0,
+    prev: r.prev_qty == null ? null : +r.prev_qty,
+    counter: r.counter || '', by: r.by_user || '',
+  }));
+}
+
 // ─── Branches ─────────────────────────────────────────────────────────────────
 
 export async function saveBranch(branch) {

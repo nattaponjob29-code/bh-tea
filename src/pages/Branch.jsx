@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { AppShell, PageHeader, Icon, StatCard, Empty, Modal, useToast, useIsMobile } from '../components/ui.jsx';
 import { HistoryView, DefectHistoryPage } from '../components/History.jsx';
+import { StockCountPage, StockReportPage } from './Stock.jsx';
 import { todayISO, nowHM, fmtDateTH, fmtNum, greetingTH } from '../lib/helpers.js';
 import { DEFECT_REASONS, FAIL_REASONS } from '../lib/constants.js';
 import { insertRecord, insertRecords, statsKpi, fetchRecords } from '../lib/db.js';
@@ -10,11 +11,16 @@ export function BranchView({ user, store, refresh, onLogout }) {
   const [page, setPage] = useState('home');
   const branch = store.branches.find(b => b.id === user.branchId);
   const branchId = user.branchId;
+  const isTest = user.role === 'Test'; // ฟีเจอร์ตรวจนับสต็อกเปิดเฉพาะ Test ก่อน (ทดสอบ)
 
   const nav = [
     { key: 'home',          label: 'หน้าหลัก',        icon: 'dashboard' },
     { key: 'produce',       label: 'บันทึกล็อตผลิต',    icon: 'factory' },
     { key: 'defect',        label: 'บันทึกของเสียหาย',  icon: 'alert' },
+    ...(isTest ? [
+      { key: 'stock',       label: 'ตรวจนับสต็อก',     icon: 'box' },
+      { key: 'stockReport', label: 'รายงานตรวจนับ',    icon: 'dashboard' },
+    ] : []),
     { key: 'history',       label: 'ประวัติการผลิต',    icon: 'history' },
     { key: 'defectHistory', label: 'ประวัติเสียหาย',    icon: 'trash' },
   ];
@@ -24,6 +30,8 @@ export function BranchView({ user, store, refresh, onLogout }) {
       {page === 'home'          && <BranchHome user={user} branch={branch} branchId={branchId} go={setPage} store={store} />}
       {page === 'produce'       && <BranchProduce user={user} store={store} refresh={refresh} />}
       {page === 'defect'        && <BranchDefect user={user} store={store} refresh={refresh} />}
+      {page === 'stock'         && <StockCountPage user={user} store={store} />}
+      {page === 'stockReport'   && <StockReportPage scopeBranchIds={[branchId]} store={store} showBranch={false} />}
       {page === 'history'       && <BranchHistory branchId={branchId} store={store} refresh={refresh} />}
       {page === 'defectHistory' && <DefectHistoryPage scopeBranchIds={[branchId]} store={store} title="ประวัติเสียหายของสาขา" eyebrow="Defect History" showBranch={false} refresh={refresh} />}
     </AppShell>
