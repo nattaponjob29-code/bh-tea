@@ -79,7 +79,7 @@ create table if not exists records (
 create table if not exists profiles (
   id        uuid primary key references auth.users(id) on delete cascade,
   username  text unique not null,
-  role      text not null check (role in ('Branch', 'Area', 'QC', 'Admin')),
+  role      text not null check (role in ('Branch', 'Area', 'QC', 'Admin', 'Test')),
   branch_id text references branches(id) on delete set null,
   areas     text[] default '{}',
   label     text default '',

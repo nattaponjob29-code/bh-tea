@@ -7,15 +7,17 @@ export const FAIL_REASONS = [
   'สี/กลิ่นไม่ผ่าน', 'ความเข้มข้นต่ำ', 'ตกตะกอน', 'เก็บอุณหภูมิไม่ได้', 'อื่นๆ',
 ];
 
-export const ROLE_OPTIONS = ['Branch', 'Area', 'QC', 'Admin'];
-export const ROLE_TH = { Branch: 'พนักงานสาขา', Area: 'Area Manager', QC: 'QC', Admin: 'ผู้ดูแลระบบ' };
-export const ROLE_COLOR = { Branch: 'var(--amber)', Area: 'var(--matcha)', QC: 'var(--info)', Admin: 'var(--tea)' };
+// Test = เหมือน Branch ทุกอย่าง แต่ไว้ทดสอบ — การเขียนข้อมูลจะไม่ลง DB จริง (ดู setTestMode ใน db.js)
+export const ROLE_OPTIONS = ['Branch', 'Area', 'QC', 'Admin', 'Test'];
+export const ROLE_TH = { Branch: 'พนักงานสาขา', Area: 'Area Manager', QC: 'QC', Admin: 'ผู้ดูแลระบบ', Test: 'ทดสอบ' };
+export const ROLE_COLOR = { Branch: 'var(--amber)', Area: 'var(--matcha)', QC: 'var(--info)', Admin: 'var(--tea)', Test: 'var(--ink-3)' };
 
 export const ROLE_DEFS = {
   Branch: { roleLabel: 'พนักงานสาขา', color: 'var(--amber)', icon: 'store' },
   Area:   { roleLabel: 'Area Manager', color: 'var(--matcha)', icon: 'shield' },
   QC:     { roleLabel: 'QC',           color: 'var(--info)',   icon: 'shield' },
   Admin:  { roleLabel: 'ผู้ดูแลระบบ',  color: 'var(--tea)',   icon: 'shield' },
+  Test:   { roleLabel: 'โหมดทดสอบ',   color: 'var(--ink-3)', icon: 'store' },
 };
 
 export const DEFAULT_BRANCHES = [

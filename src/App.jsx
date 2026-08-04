@@ -1,6 +1,7 @@
 import { useState, useEffect, Component } from 'react';
 import { supabase } from './lib/supabase.js';
 import { ROLE_DEFS } from './lib/constants.js';
+import { setTestMode } from './lib/db.js';
 import { StoreProvider, useStore, clearStoreCache } from './context/StoreContext.jsx';
 import { LoginScreen } from './pages/Login.jsx';
 import { BranchView } from './pages/Branch.jsx';
@@ -32,6 +33,20 @@ class ErrorBoundary extends Component {
   }
 }
 
+function TestBanner() {
+  return (
+    <div style={{
+      position: 'fixed', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999,
+      background: 'var(--ink)', color: '#fffdf7', padding: '9px 18px', borderRadius: 999,
+      fontSize: 13, fontWeight: 500, boxShadow: '0 10px 30px -8px rgba(0,0,0,.35)',
+      pointerEvents: 'none', display: 'flex', alignItems: 'center', gap: 8, maxWidth: '92vw',
+      fontFamily: '"IBM Plex Sans Thai", system-ui, sans-serif',
+    }}>
+      🧪 โหมดทดสอบ — ลองใช้งานได้เต็มที่ ข้อมูลจะไม่ถูกบันทึกจริง
+    </div>
+  );
+}
+
 function AppInner() {
   const [session, setSession] = useState(undefined);
   const { store, loading: storeLoading, refresh } = useStore();
@@ -55,6 +70,12 @@ function AppInner() {
     const t = setTimeout(() => setSlow(true), 20000);
     return () => clearTimeout(t);
   }, [session, storeLoading]);
+
+  // เปิด/ปิด "โหมดทดสอบ" ตาม role ของผู้ใช้ที่ล็อกอิน — role Test จะไม่เขียนข้อมูลลง DB จริง
+  useEffect(() => {
+    const role = (session && store) ? store.users.find(u => u.id === session.user.id)?.role : null;
+    setTestMode(role === 'Test');
+  }, [session, store]);
 
   const onLogout = async () => {
     clearStoreCache();
@@ -111,6 +132,7 @@ function AppInner() {
 
   const props = { user, store, refresh, onLogout };
   if (user.role === 'Branch') return <BranchView {...props} />;
+  if (user.role === 'Test')   return <><TestBanner /><BranchView {...props} /></>;
   if (user.role === 'Area')   return <AreaView   {...props} />;
   if (user.role === 'QC')     return <QCView     {...props} />;
   if (user.role === 'Admin')  return <AdminView  {...props} />;

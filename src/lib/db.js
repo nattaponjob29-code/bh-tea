@@ -1,5 +1,12 @@
 import { supabase } from './supabase.js';
 
+// ─── Test mode ────────────────────────────────────────────────────────────────
+// เมื่อผู้ใช้ role 'Test' ล็อกอิน App จะเรียก setTestMode(true) → การเขียนข้อมูลทุกชนิด
+// จะถูกข้าม (no-op) ทำให้ "ลองใช้งานได้เหมือนจริง แต่ไม่มีผลกับข้อมูลใน DB"
+let TEST_MODE = false;
+export function setTestMode(v) { TEST_MODE = !!v; }
+export function isTestMode() { return TEST_MODE; }
+
 // ─── Transform helpers ────────────────────────────────────────────────────────
 
 function fromRecord(r) {
@@ -181,21 +188,25 @@ export async function fetchRecordStats() {
 // ─── Records mutations ────────────────────────────────────────────────────────
 
 export async function insertRecord(rec) {
+  if (TEST_MODE) return;
   const { error } = await supabase.from('records').insert(toRecord(rec));
   if (error) throw new Error(error.message);
 }
 
 export async function insertRecords(recs) {
+  if (TEST_MODE) return;
   const { error } = await supabase.from('records').insert(recs.map(toRecord));
   if (error) throw new Error(error.message);
 }
 
 export async function deleteRecord(id) {
+  if (TEST_MODE) return;
   const { error } = await supabase.from('records').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }
 
 export async function deleteRecords(ids) {
+  if (TEST_MODE) return;
   if (!ids || ids.length === 0) return;
   const { error } = await supabase.from('records').delete().in('id', ids);
   if (error) throw new Error(error.message);
@@ -204,11 +215,13 @@ export async function deleteRecords(ids) {
 // ─── Branches ─────────────────────────────────────────────────────────────────
 
 export async function saveBranch(branch) {
+  if (TEST_MODE) return;
   const { error } = await supabase.from('branches').upsert(branch, { onConflict: 'id' });
   if (error) throw new Error(error.message);
 }
 
 export async function deleteBranch(id) {
+  if (TEST_MODE) return;
   const { error } = await supabase.from('branches').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }
@@ -216,11 +229,13 @@ export async function deleteBranch(id) {
 // ─── Menus ────────────────────────────────────────────────────────────────────
 
 export async function saveMenu(menu) {
+  if (TEST_MODE) return;
   const { error } = await supabase.from('menus').upsert(menu, { onConflict: 'id' });
   if (error) throw new Error(error.message);
 }
 
 export async function deleteMenu(id) {
+  if (TEST_MODE) return;
   await Promise.all([
     supabase.from('bom_prod').delete().eq('menu_id', id),
     supabase.from('bom_defect').delete().eq('menu_id', id),
@@ -232,11 +247,13 @@ export async function deleteMenu(id) {
 // ─── Ingredients ──────────────────────────────────────────────────────────────
 
 export async function saveIngredient(ing) {
+  if (TEST_MODE) return;
   const { error } = await supabase.from('ingredients').upsert(ing, { onConflict: 'code' });
   if (error) throw new Error(error.message);
 }
 
 export async function deleteIngredient(code) {
+  if (TEST_MODE) return;
   await Promise.all([
     supabase.from('bom_prod').delete().eq('ingredient_code', code),
     supabase.from('bom_defect').delete().eq('ingredient_code', code),
@@ -248,6 +265,7 @@ export async function deleteIngredient(code) {
 // ─── BOM ──────────────────────────────────────────────────────────────────────
 
 export async function saveBomProd(menuId, lines) {
+  if (TEST_MODE) return;
   await supabase.from('bom_prod').delete().eq('menu_id', menuId);
   if (!lines.length) return;
   const { error } = await supabase.from('bom_prod').insert(
@@ -257,6 +275,7 @@ export async function saveBomProd(menuId, lines) {
 }
 
 export async function saveBomDefect(menuId, lines) {
+  if (TEST_MODE) return;
   await supabase.from('bom_defect').delete().eq('menu_id', menuId);
   if (!lines.length) return;
   const { error } = await supabase.from('bom_defect').insert(
@@ -268,6 +287,7 @@ export async function saveBomDefect(menuId, lines) {
 // ─── Profiles (update role/branch/areas/label — password via API route) ───────
 
 export async function updateProfile(id, patch) {
+  if (TEST_MODE) return;
   const row = {};
   if (patch.role !== undefined)     row.role = patch.role;
   if (patch.branchId !== undefined) row.branch_id = patch.branchId || null;

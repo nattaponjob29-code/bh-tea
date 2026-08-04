@@ -692,7 +692,7 @@ function validateUser(u, existingUsers, editingId) {
   if (!editingId && (!u.password || !u.password.trim())) return 'ระบุรหัสผ่าน';
   if (!u.role) return 'ระบุ role';
   if (!editingId && existingUsers.some(x => x.username.toLowerCase() === u.username.toLowerCase())) return `username "${u.username}" ซ้ำ`;
-  if (u.role === 'Branch' && !u.branchId) return 'Branch ต้องเลือกสาขา';
+  if ((u.role === 'Branch' || u.role === 'Test') && !u.branchId) return 'ต้องเลือกสาขา';
   if (u.role === 'Area' && (!u.areas || u.areas.length === 0)) return 'Area ต้องเลือกพื้นที่อย่างน้อย 1 อัน';
   return null;
 }
@@ -738,7 +738,7 @@ function parseUsersCSV(text, branches, allAreas) {
     else role = roleMatch;
 
     let bId = '';
-    if (role === 'Branch') {
+    if (role === 'Branch' || role === 'Test') {
       if (branchId && branchIds.has(branchId)) bId = branchId;
       else if (branchId) warnings.push(`บรรทัด ${lineNo + 1}: branchId "${branchId}" ไม่พบในระบบ`);
     }
@@ -806,7 +806,7 @@ function UserFormFields({ form, setForm, branches, areas, disableUser }) {
       </label>
       <label className="field" style={{ gridColumn: '1/-1' }}>
         <span>Role</span>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))', gap: 8 }}>
           {ROLE_OPTIONS.map(r => (
             <button key={r} type="button" onClick={() => setForm({ ...form, role: r, branchId: '', areas: [] })} style={{
               padding: '12px 8px', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit',
@@ -818,7 +818,7 @@ function UserFormFields({ form, setForm, branches, areas, disableUser }) {
           ))}
         </div>
       </label>
-      {form.role === 'Branch' && (
+      {(form.role === 'Branch' || form.role === 'Test') && (
         <label className="field fade-up" style={{ gridColumn: '1/-1' }}>
           <span>ผูกสาขา</span>
           <select className="inp" value={form.branchId} onChange={e => setForm({ ...form, branchId: e.target.value })}>
@@ -861,7 +861,7 @@ function BulkRow({ i, row, onChange, onRemove, branches, areas }) {
         </select>
       </td>
       <td>
-        {row.role === 'Branch' ? (
+        {(row.role === 'Branch' || row.role === 'Test') ? (
           <select className="inp" style={inputCellStyle} value={row.branchId} onChange={e => onChange({ branchId: e.target.value })}>
             <option value="">— เลือกสาขา —</option>
             {branches.map(b => <option key={b.id} value={b.id}>{b.id} · {b.name}</option>)}
