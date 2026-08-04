@@ -137,9 +137,14 @@ table.t tbody tr { transition: background var(--t-fast); }
 table.t tbody tr:hover { background: rgba(201,138,60,.06); }
 
 /* ตัวกรองรายงานตรวจนับ — กระชับบนมือถือ */
+.stock-filters .fgrid { display: grid; gap: 10px; grid-template-columns: repeat(4, 1fr); }
+.stock-filters .fgrid .search { grid-column: 1 / -1; }
 .stock-filters .field > span { font-size: 10px; margin-bottom: 3px; }
 .stock-filters .inp { padding: 8px 10px; font-size: 13px; }
+.stock-filters input[type="date"] { text-align: left; }
 @media (max-width: 640px) {
+  .stock-filters .fgrid { grid-template-columns: 1fr 1fr; }
+  .stock-filters .fgrid .date { grid-column: 1 / -1; }  /* วันที่เต็มแถว กันซ้อนกัน */
   .stock-filters .field > span { font-size: 9.5px; }
   .stock-filters .inp { padding: 7px 8px; font-size: 12.5px; }
 }
