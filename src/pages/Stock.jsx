@@ -77,6 +77,7 @@ export function StockCountPage({ user, store }) {
   });
 
   const doneCount = allItems.filter(i => counts[i.code] !== '' && counts[i.code] !== undefined).length;
+  const complete = allItems.length > 0 && doneCount === allItems.length; // นับครบทุกรายการหรือยัง
 
   // Enter / ปุ่ม "ถัดไป" บนคีย์บอร์ด → ไปช่องถัดไป
   const onKey = (e, code) => {
@@ -98,12 +99,14 @@ export function StockCountPage({ user, store }) {
         counter, by: user.id,
       }));
     if (!rows.length) return toast('ยังไม่ได้กรอกจำนวนสักรายการ', 'bad');
+    if (status === 'final' && rows.length < allItems.length)
+      return toast(`นับให้ครบก่อนบันทึกผล — เหลืออีก ${allItems.length - rows.length} รายการ`, 'bad');
     setSaving(true);
     try {
       await saveStockCounts(rows, status);
       if (status === 'draft') { toast(`บันทึกแบบร่างแล้ว (${rows.length} รายการ)`, 'ok'); setLastDraft('บันทึกแบบร่างล่าสุดเมื่อครู่'); }
       else {
-        toast(`บันทึกผลตรวจนับแล้ว (${rows.length} รายการ${rows.length < allItems.length ? ` · ยังไม่ครบ ${allItems.length - rows.length}` : ''})`, 'ok');
+        toast(`บันทึกผลตรวจนับแล้ว (${rows.length} รายการ)`, 'ok');
         setCounts({}); setLastDraft(null); // เคลียร์ช่องหลังบันทึกจริง
       }
     } catch (e) { toast(e.message, 'bad'); }
@@ -196,11 +199,18 @@ export function StockCountPage({ user, store }) {
             </div>
           ))}
 
-          <div style={{ position: 'sticky', bottom: 0, background: 'var(--bg)', padding: '12px 0', display: 'flex', gap: 10, borderTop: '1px solid var(--line)', marginTop: 6 }}>
-            <button className="btn ghost" style={{ flex: 1, justifyContent: 'center' }} disabled={saving} onClick={() => save('draft')}>บันทึกแบบร่าง</button>
-            <button className="btn amber" style={{ flex: 1.4, justifyContent: 'center' }} disabled={saving} onClick={() => save('final')}>
-              <Icon name="check" size={14} /> {saving ? 'กำลังบันทึก...' : 'บันทึกผลตรวจนับ'}
-            </button>
+          <div style={{ position: 'sticky', bottom: 0, background: 'var(--bg)', padding: '12px 0', borderTop: '1px solid var(--line)', marginTop: 6 }}>
+            {!complete && (
+              <div style={{ fontSize: 12.5, color: 'var(--ink-3)', textAlign: 'center', marginBottom: 9 }}>
+                ยังนับไม่ครบ — เหลืออีก <b style={{ color: 'var(--bad)' }}>{allItems.length - doneCount}</b> รายการ · บันทึกผลได้เมื่อนับครบ (ตอนนี้บันทึกแบบร่างได้)
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn ghost" style={{ flex: 1, justifyContent: 'center' }} disabled={saving || doneCount === 0} onClick={() => save('draft')}>บันทึกแบบร่าง</button>
+              <button className="btn amber" style={{ flex: 1.4, justifyContent: 'center' }} disabled={saving || !complete} onClick={() => save('final')}>
+                <Icon name="check" size={14} /> {saving ? 'กำลังบันทึก...' : 'บันทึกผลตรวจนับ'}
+              </button>
+            </div>
           </div>
         </>
       )}
