@@ -38,10 +38,12 @@ const SCHEDS = {
 };
 const MOVE_LEAD = 3; // เผื่อ lead time เบิกของ (วัน) — รอบเบิกต้องห่างจากวันนับ ≥ ค่านี้
 
-const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
-const dowOf = (iso) => new Date(iso + 'T00:00:00').getDay();
-const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
-const shortTH = (iso) => { const d = new Date(iso + 'T00:00:00'); return d.getDate() + ' ' + THMONTHS[d.getMonth()]; };
+// ใช้ UTC ล้วนตลอดสาย (parse/แก้/format แบบ UTC) กันวันเพี้ยนในโซนเวลาบวก UTC เช่นไทย (+7)
+// ถ้าผสม parse-local กับ toISOString() (UTC) จะเสียวันไปทุกครั้งที่เรียก จนลูป while หา r2 ไม่จบ (ค้างทั้งหน้า)
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const dowOf = (iso) => new Date(iso + 'T00:00:00Z').getUTCDay();
+const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+const shortTH = (iso) => { const d = new Date(iso + 'T00:00:00Z'); return d.getUTCDate() + ' ' + THMONTHS[d.getUTCMonth()]; };
 // วันพุธล่าสุดที่ ≤ iso (จุดเริ่มสัปดาห์แสดงผล: พุธ→อังคาร)
 const wedStartFor = (iso) => addDays(iso, -((dowOf(iso) - 3 + 7) % 7));
 
@@ -54,7 +56,10 @@ function schedInfo(key, weekEndISO) {
   const r1 = addDays(weekEndISO, c1.gap);
   const otherDow = dows.find(d => d !== c1.dow);
   let r2 = addDays(r1, 1);
-  while (dowOf(r2) !== otherDow) r2 = addDays(r2, 1);
+  for (let guard = 0; dowOf(r2) !== otherDow; guard++) {
+    if (guard >= 8) throw new Error('schedInfo: หาวันรอบ2 ไม่เจอภายใน 8 วัน — ตรวจสอบการคำนวณวันที่'); // กันลูปค้าง
+    r2 = addDays(r2, 1);
+  }
   return { r1, r2, daysToR1: c1.gap, coverR1: daysBetween(r1, r2), dows };
 }
 
