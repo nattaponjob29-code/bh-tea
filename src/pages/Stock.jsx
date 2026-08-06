@@ -3,7 +3,10 @@ import { PageHeader, Icon, Empty, useToast, SearchBox } from '../components/ui.j
 import { DateQuickPresets } from '../components/History.jsx';
 import { COUNT_TAGS } from '../lib/constants.js';
 import { todayISO, fmtNum, fmtDateTH } from '../lib/helpers.js';
-import { fetchLastCounts, fetchCountsForDate, saveStockCounts, fetchStockHistory } from '../lib/db.js';
+import {
+  fetchLastCounts, fetchCountsForDate, saveStockCounts, fetchStockHistory,
+  fetchStockCountsRange, fetchStockReceivingRange, insertStockReceiving, deleteStockReceiving,
+} from '../lib/db.js';
 
 /* ---------- รอบตรวจนับ (auto ตามวันที่) ---------- */
 const CYCLE_LABEL = { daily: 'ประจำวัน', weekly: 'ประจำสัปดาห์', monthly: 'สิ้นเดือน' };
@@ -23,6 +26,101 @@ function Variance({ v, unit }) {
   if (v === null || v === undefined || isNaN(v)) return <span style={{ color: 'var(--ink-3)', fontSize: 12 }}>— ยังไม่นับ</span>;
   const c = v < 0 ? 'var(--bad)' : v > 0 ? 'var(--ok)' : 'var(--ink-3)';
   return <span className="num" style={{ color: c, fontWeight: 600 }}>{v > 0 ? '+' : ''}{fmtNum(v)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--ink-3)' }}>{unit}</span></span>;
+}
+
+/* ---------- เคลื่อนไหวสินค้า: วันที่ / รอบรถ ---------- */
+const THMONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const DOWSHORT = { 0: 'อา', 1: 'จ', 2: 'อ', 3: 'พ', 4: 'พฤ', 5: 'ศ', 6: 'ส' };
+const SCHEDS = {
+  'mon-thu': { label: 'จันทร์ – พฤหัส', dows: [1, 4] },
+  'tue-fri': { label: 'อังคาร – ศุกร์', dows: [2, 5] },
+  'wed-sat': { label: 'พุธ – เสาร์', dows: [3, 6] },
+};
+const MOVE_LEAD = 3; // เผื่อ lead time เบิกของ (วัน) — รอบเบิกต้องห่างจากวันนับ ≥ ค่านี้
+
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const dowOf = (iso) => new Date(iso + 'T00:00:00').getDay();
+const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+const shortTH = (iso) => { const d = new Date(iso + 'T00:00:00'); return d.getDate() + ' ' + THMONTHS[d.getMonth()]; };
+// วันพุธล่าสุดที่ ≤ iso (จุดเริ่มสัปดาห์แสดงผล: พุธ→อังคาร)
+const wedStartFor = (iso) => addDays(iso, -((dowOf(iso) - 3 + 7) % 7));
+
+// รอบเบิก 2 รอบถัดไป (นับจากวันสิ้นสัปดาห์ = วันอังคารที่นับ Weekly) ตามรอบรถที่เลือก
+function schedInfo(key, weekEndISO) {
+  const dows = SCHEDS[key].dows;
+  const gapOf = (dow) => { const g = (dow - dowOf(weekEndISO) + 7) % 7; return g === 0 ? 7 : g; };
+  const cand = dows.map(dow => ({ dow, gap: gapOf(dow) })).filter(c => c.gap >= MOVE_LEAD).sort((a, b) => a.gap - b.gap);
+  const c1 = cand[0];
+  const r1 = addDays(weekEndISO, c1.gap);
+  const otherDow = dows.find(d => d !== c1.dow);
+  let r2 = addDays(r1, 1);
+  while (dowOf(r2) !== otherDow) r2 = addDays(r2, 1);
+  return { r1, r2, daysToR1: c1.gap, coverR1: daysBetween(r1, r2), dows };
+}
+
+// เมตริกของวัตถุดิบ 1 ตัวในสัปดาห์ที่แสดง: Usage / Avg / Max / Min / Suggest (2 รอบ)
+function computeMoveMetrics(countsByDate, weekDays, recvInWeek, recvFuture, info) {
+  const countedDays = weekDays.filter(d => countsByDate[d]);
+  if (!countedDays.length) return null;
+  const first = countsByDate[countedDays[0]];
+  const last = countsByDate[countedDays[countedDays.length - 1]];
+  const open = first.prev != null ? first.prev : first.counted;
+  const close = last.counted;
+  const usage = open + recvInWeek - close;           // ใช้ไปสุทธิ (บวกของรับเข้ากลับ)
+  const avg = usage / 7;
+  const max = Math.ceil(avg * 7 * 1.15);              // Max = avg×7×1.15
+  const min = Math.ceil(avg * 4);                     // Min = avg×4
+  const inW1List = recvFuture.filter(r => r.date <= info.r1);
+  const inW1 = inW1List.reduce((s, r) => s + r.qty, 0);
+  const projR1 = close - avg * info.daysToR1 + inW1;
+  const s1 = Math.min(max, Math.max(0, Math.ceil(max - projR1)));
+  const stockout1 = projR1 < 0;
+  const inW2 = recvFuture.filter(r => r.date > info.r1 && r.date <= info.r2).reduce((s, r) => s + r.qty, 0);
+  const projR2 = max - avg * info.coverR1 + inW2;
+  const s2 = Math.min(max, Math.max(0, Math.ceil(max - projR2)));
+  return { usage, avg, max, min, s1, s2, stockout1, inW1List };
+}
+
+function tabBtnStyle(on) {
+  return {
+    padding: '10px 18px', borderRadius: 99, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+    background: on ? 'var(--paper)' : 'transparent', color: on ? 'var(--ink)' : 'var(--ink-3)',
+    boxShadow: on ? 'var(--shadow-sm)' : 'none', fontSize: 14, fontWeight: on ? 600 : 500,
+    display: 'inline-flex', alignItems: 'center', gap: 8, transition: 'all 140ms', whiteSpace: 'nowrap',
+  };
+}
+
+// ช่องค้นหาวัตถุดิบแบบพิมพ์+เลือก (ไม่ใช่ dropdown)
+function AutoField({ label, placeholder, value, onChange, matches, onPick }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  return (
+    <label className="field" ref={ref} style={{ position: 'relative' }}>
+      <span>{label}</span>
+      <input className="inp" autoComplete="off" placeholder={placeholder} value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} />
+      {open && matches.length > 0 && (
+        <div className="card fade-up" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 40, padding: 4, maxHeight: 220, overflowY: 'auto', boxShadow: 'var(--shadow-lg)' }}>
+          {matches.slice(0, 8).map(m => (
+            <button key={m.code} type="button" onMouseDown={e => { e.preventDefault(); onPick(m); setOpen(false); }} style={{
+              display: 'block', width: '100%', textAlign: 'left', padding: '9px 12px', borderRadius: 8,
+              border: 'none', background: 'transparent', fontFamily: 'inherit', fontSize: 13, cursor: 'pointer',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              <b className="font-mono" style={{ fontSize: 11.5 }}>{m.code}</b> · {m.name} <span style={{ color: 'var(--ink-3)', fontSize: 11 }}>· {m.unit}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </label>
+  );
 }
 
 /* ========== หน้าตรวจนับ ========== */
@@ -335,6 +433,271 @@ export function StockReportPage({ scopeBranchIds, store, showBranch = false }) {
             </table>
           </div>
         )}
+      </div>
+    </>
+  );
+}
+
+/* ========== เคลื่อนไหวสินค้า ========== */
+function MovementTab({ user, store, refreshKey }) {
+  const toast = useToast();
+  const branchId = user.branchId;
+  const [sched, setSched] = useState('mon-thu');
+  const [weekStart, setWeekStart] = useState(() => wedStartFor(todayISO()));
+  const [countRows, setCountRows] = useState([]);
+  const [recvRows, setRecvRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)), [weekStart]);
+  const weekEnd = weekDays[6];
+  const info = useMemo(() => schedInfo(sched, weekEnd), [sched, weekEnd]);
+
+  useEffect(() => {
+    if (!branchId) { setLoading(false); return; }
+    let alive = true;
+    setLoading(true);
+    Promise.all([
+      fetchStockCountsRange({ branchId, from: weekStart, to: weekEnd }),
+      fetchStockReceivingRange({ branchId, from: weekStart, to: info.r2 }),
+    ]).then(([c, r]) => { if (alive) { setCountRows(c); setRecvRows(r); setLoading(false); } })
+      .catch(e => { if (alive) setLoading(false); toast(e.message, 'bad'); });
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, weekStart, sched, refreshKey]);
+
+  const rows = useMemo(() => {
+    const tagged = (store.ingredients || []).filter(i => i.count_tag);
+    const byCode = {};
+    countRows.forEach(r => { (byCode[r.code] = byCode[r.code] || {})[r.date] = r; });
+    const recvByCode = {};
+    recvRows.forEach(r => { (recvByCode[r.code] = recvByCode[r.code] || []).push(r); });
+    return tagged.map(ing => {
+      const cd = byCode[ing.code] || {};
+      const recvForCode = recvByCode[ing.code] || [];
+      const recvInWeek = recvForCode.filter(r => r.date >= weekStart && r.date <= weekEnd).reduce((s, r) => s + r.qty, 0);
+      const recvFuture = recvForCode.filter(r => r.date > weekEnd);
+      return { ing, cd, m: computeMoveMetrics(cd, weekDays, recvInWeek, recvFuture, info) };
+    });
+  }, [store.ingredients, countRows, recvRows, weekDays, weekStart, weekEnd, info]);
+
+  return (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <select className="inp" value={sched} onChange={e => setSched(e.target.value)} style={{ width: 'auto', fontWeight: 600 }}>
+          <option value="mon-thu">🚚 รอบรถ จันทร์ – พฤหัส</option>
+          <option value="tue-fri">🚚 รอบรถ อังคาร – ศุกร์</option>
+          <option value="wed-sat">🚚 รอบรถ พุธ – เสาร์</option>
+        </select>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--paper)', border: '1px solid var(--line-2)', borderRadius: 999, padding: '5px 6px' }}>
+          <button className="btn ghost sm" onClick={() => setWeekStart(w => addDays(w, -7))} style={{ padding: '6px 10px' }}>‹</button>
+          <span className="num" style={{ fontWeight: 600, fontSize: 13.5, whiteSpace: 'nowrap' }}>{shortTH(weekStart)} – {shortTH(weekEnd)}</span>
+          <button className="btn ghost sm" onClick={() => setWeekStart(w => addDays(w, 7))} style={{ padding: '6px 10px' }}>›</button>
+        </div>
+      </div>
+
+      <div className="card stock-report" style={{ overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--ink-3)' }}>กำลังโหลด...</div>
+        ) : rows.length === 0 ? (
+          <Empty icon="box" title="ยังไม่มีวัตถุดิบที่ตั้ง Tag" subtitle="กำหนด Tag รอบตรวจนับให้วัตถุดิบก่อน (Admin → วัตถุดิบ)" />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="t">
+              <thead>
+                <tr>
+                  <th>รหัสสินค้า</th><th>ชื่อสินค้า</th><th>หน่วย</th>
+                  <th style={{ textAlign: 'right' }}>Max</th><th style={{ textAlign: 'right' }}>Min</th>
+                  {weekDays.map(d => {
+                    const dow = dowOf(d), isDeliv = info.dows.includes(dow), isWe = dow === 0 || dow === 6;
+                    return (
+                      <th key={d} style={{ textAlign: 'center', background: isDeliv ? 'color-mix(in oklab, var(--matcha) 15%, var(--paper))' : isWe ? 'color-mix(in oklab, var(--info) 8%, var(--paper))' : undefined }}>
+                        <span style={{ display: 'block' }}>{DOWSHORT[dow]}{isDeliv ? ' 🚚' : ''}</span>
+                        <span className="num" style={{ display: 'block', fontSize: 10, color: 'var(--ink-3)', fontWeight: 400, textTransform: 'none' }}>{shortTH(d)}</span>
+                      </th>
+                    );
+                  })}
+                  <th style={{ textAlign: 'right' }}>Usage</th>
+                  <th style={{ textAlign: 'right' }}>Avg./Day</th>
+                  <th style={{ textAlign: 'right' }}>In-transit</th>
+                  <th style={{ textAlign: 'right' }}>Suggest เบิก</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ ing, cd, m }) => (
+                  <tr key={ing.code}>
+                    <td className="font-mono" style={{ fontSize: 11.5, color: 'var(--ink-3)' }}>{ing.code}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      {ing.name}
+                      <span className="num" style={{ background: TAG_COLOR[ing.count_tag], color: '#fff', fontSize: 9.5, fontWeight: 600, padding: '1px 7px', borderRadius: 999, marginLeft: 7 }}>{COUNT_TAGS[ing.count_tag]}</span>
+                    </td>
+                    <td><span className="badge">{ing.unit}</span></td>
+                    <td className="num" style={{ textAlign: 'right' }}>{m ? m.max : <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
+                    <td className="num" style={{ textAlign: 'right' }}>{m ? m.min : <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
+                    {weekDays.map(d => {
+                      const row = cd[d], dow = dowOf(d), isDeliv = info.dows.includes(dow);
+                      return (
+                        <td key={d} className="num" style={{ textAlign: 'center', background: isDeliv ? 'color-mix(in oklab, var(--matcha) 5%, transparent)' : undefined }}>
+                          {row ? fmtNum(row.counted) : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="num" style={{ textAlign: 'right', fontWeight: 700 }}>
+                      {m ? <>{fmtNum(m.usage)} <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--ink-3)' }}>{ing.unit}</span></> : <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>—</span>}
+                    </td>
+                    <td className="num" style={{ textAlign: 'right' }}>{m ? m.avg.toFixed(2) : <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      {m && m.inW1List.length ? m.inW1List.map((r, i) => (
+                        <div key={i} style={{ display: 'flex', justifyContent: 'flex-end', gap: 7, fontSize: 11 }}>
+                          <span style={{ color: 'var(--ink-3)' }}>{shortTH(r.date)}</span>
+                          <b className="num" style={{ color: 'var(--ok)' }}>+{fmtNum(r.qty)}</b>
+                        </div>
+                      )) : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {m ? (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'baseline' }}>
+                            <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>รอบ1{m.stockout1 && <span style={{ color: 'var(--bad)' }} title="ของหมดก่อนรถมา — cap ที่ Max"> ⚠</span>}</span>
+                            <b className="num" style={{ color: m.s1 > 0 ? 'var(--amber)' : 'var(--ink-3)' }}>{fmtNum(m.s1)}</b>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'baseline', marginTop: 2 }}>
+                            <span style={{ fontSize: 10, color: 'var(--ink-3)' }}>รอบ2</span>
+                            <b className="num" style={{ color: m.s2 > 0 ? 'var(--amber)' : 'var(--ink-3)' }}>{fmtNum(m.s2)}</b>
+                          </div>
+                        </>
+                      ) : <span style={{ color: 'var(--ink-3)' }}>—</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ========== เติมสินค้ารับเข้า ========== */
+function ReceivingTab({ user, store, onChanged }) {
+  const toast = useToast();
+  const branchId = user.branchId;
+  const [date, setDate] = useState(todayISO());
+  const [codeQ, setCodeQ] = useState('');
+  const [nameQ, setNameQ] = useState('');
+  const [selCode, setSelCode] = useState(null);
+  const [unit, setUnit] = useState('');
+  const [qty, setQty] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const ingByCode = useMemo(() => { const m = {}; (store.ingredients || []).forEach(i => { m[i.code] = i; }); return m; }, [store.ingredients]);
+
+  const load = useCallback(async () => {
+    if (!branchId) { setLoading(false); return; }
+    setLoading(true);
+    try { setRows(await fetchStockReceivingRange({ branchId })); }
+    catch (e) { toast(e.message, 'bad'); }
+    finally { setLoading(false); }
+  }, [branchId, toast]);
+  useEffect(() => { load(); }, [load]);
+
+  const codeMatches = codeQ.trim() ? (store.ingredients || []).filter(i => i.code.toLowerCase().includes(codeQ.trim().toLowerCase())) : [];
+  const nameMatches = nameQ.trim() ? (store.ingredients || []).filter(i => i.name.toLowerCase().includes(nameQ.trim().toLowerCase())) : [];
+
+  const pick = (i) => { setSelCode(i.code); setCodeQ(i.code); setNameQ(i.name); setUnit(i.unit); };
+  const onCodeChange = (v) => {
+    setCodeQ(v);
+    const exact = (store.ingredients || []).find(i => i.code.toLowerCase() === v.trim().toLowerCase());
+    if (exact) { setSelCode(exact.code); setNameQ(exact.name); setUnit(exact.unit); } else { setSelCode(null); setUnit(''); }
+  };
+  const onNameChange = (v) => {
+    setNameQ(v);
+    const exact = (store.ingredients || []).find(i => i.name.toLowerCase() === v.trim().toLowerCase());
+    if (exact) { setSelCode(exact.code); setCodeQ(exact.code); setUnit(exact.unit); } else { setSelCode(null); setUnit(''); }
+  };
+
+  const add = async () => {
+    const q = parseFloat(qty);
+    if (!date || !selCode || !q || q <= 0) return toast('กรอกวันที่ / เลือกสินค้า (ค้นหารหัสหรือชื่อ) / จำนวนให้ครบ', 'bad');
+    setSaving(true);
+    try {
+      await insertStockReceiving({ branchId, date, code: selCode, qty: q, by: user.id });
+      toast('เพิ่มรับเข้าแล้ว', 'ok');
+      setCodeQ(''); setNameQ(''); setUnit(''); setQty(''); setSelCode(null);
+      await load(); onChanged();
+    } catch (e) { toast(e.message, 'bad'); }
+    finally { setSaving(false); }
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm('ลบรายการรับเข้านี้?')) return;
+    try { await deleteStockReceiving(id); await load(); onChanged(); toast('ลบแล้ว', 'ok'); }
+    catch (e) { toast(e.message, 'bad'); }
+  };
+
+  return (
+    <>
+      <div className="card" style={{ padding: '18px 20px', marginBottom: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, alignItems: 'end' }}>
+          <label className="field"><span>วันที่รับเข้า</span><input type="date" className="inp" value={date} onChange={e => setDate(e.target.value)} /></label>
+          <AutoField label="รหัสสินค้า" placeholder="พิมพ์ค้นหารหัส" value={codeQ} onChange={onCodeChange} matches={codeMatches} onPick={pick} />
+          <AutoField label="ชื่อสินค้า" placeholder="พิมพ์ค้นหาชื่อ" value={nameQ} onChange={onNameChange} matches={nameMatches} onPick={pick} />
+          <label className="field"><span>จำนวนรับเข้า</span><input type="number" min="0" className="inp" value={qty} onChange={e => setQty(e.target.value)} placeholder="0" /></label>
+          <label className="field"><span>หน่วย</span><input className="inp" value={unit} readOnly placeholder="—" style={{ background: 'var(--bg-2)', color: 'var(--ink-2)' }} /></label>
+          <button className="btn amber" onClick={add} disabled={saving} style={{ justifyContent: 'center' }}><Icon name="plus" size={14} /> เพิ่มรับเข้า</button>
+        </div>
+      </div>
+
+      <div className="card stock-report" style={{ overflow: 'hidden' }}>
+        <div style={{ padding: '14px 18px 6px', fontSize: 11, color: 'var(--ink-3)', textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>รายการรับเข้าล่าสุด</div>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--ink-3)' }}>กำลังโหลด...</div>
+        ) : rows.length === 0 ? (
+          <Empty icon="box" title="ยังไม่มีรายการรับเข้า" subtitle="เพิ่มรายการแรกด้านบน" />
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="t">
+              <thead><tr><th>วันที่</th><th>สินค้า</th><th style={{ textAlign: 'right' }}>จำนวนรับเข้า</th><th style={{ width: 60 }}></th></tr></thead>
+              <tbody>
+                {rows.map(r => {
+                  const it = ingByCode[r.code];
+                  return (
+                    <tr key={r.id}>
+                      <td>{fmtDateTH(r.date)}</td>
+                      <td><div style={{ fontWeight: 500 }}>{it?.name || r.code}</div><div className="font-mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>{r.code}</div></td>
+                      <td className="num" style={{ textAlign: 'right', fontWeight: 600, color: 'var(--ok)' }}>+{fmtNum(r.qty)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--ink-3)' }}>{it?.unit || ''}</span></td>
+                      <td style={{ textAlign: 'right' }}><button className="btn ghost sm" onClick={() => remove(r.id)}><Icon name="x" size={12} /></button></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ========== เคลื่อนไหวสินค้า (แท็บรวม) ========== */
+export function StockMovementPage({ user, store }) {
+  const [tab, setTab] = useState('move');
+  const [recvVersion, setRecvVersion] = useState(0); // เพิ่มค่านี้เพื่อสั่งให้แท็บเคลื่อนไหวโหลดใหม่หลังแก้รายการรับเข้า
+
+  return (
+    <>
+      <PageHeader eyebrow="Stock Movement" title="เคลื่อนไหวสินค้า" subtitle="ติดตามยอดตรวจนับรายวัน · บันทึกรับสินค้าเข้า · คำนวณยอดที่ใช้ไปจริง" />
+      <div style={{ display: 'inline-flex', padding: 4, background: 'var(--bg-2)', border: '1px solid var(--line)', borderRadius: 99, marginBottom: 18 }} className="fade-up">
+        <button onClick={() => setTab('move')} style={tabBtnStyle(tab === 'move')}>📊 เคลื่อนไหวสินค้า</button>
+        <button onClick={() => setTab('recv')} style={tabBtnStyle(tab === 'recv')}>📥 เติมสินค้ารับเข้า</button>
+      </div>
+      <div style={{ display: tab === 'move' ? 'block' : 'none' }}>
+        <MovementTab user={user} store={store} refreshKey={recvVersion} />
+      </div>
+      <div style={{ display: tab === 'recv' ? 'block' : 'none' }}>
+        <ReceivingTab user={user} store={store} onChanged={() => setRecvVersion(v => v + 1)} />
       </div>
     </>
   );

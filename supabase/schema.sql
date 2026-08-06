@@ -203,3 +203,18 @@ create policy "auth read stock_counts"   on stock_counts for select using (auth.
 create policy "auth insert stock_counts" on stock_counts for insert with check (auth.role() = 'authenticated');
 create policy "auth update stock_counts" on stock_counts for update using (auth.role() = 'authenticated');
 create policy "auth delete stock_counts" on stock_counts for delete using (auth.role() = 'authenticated');
+
+-- ── Stock receiving (เติมสินค้ารับเข้า) — ดู supabase/add_stock_receiving.sql ──
+create table if not exists stock_receiving (
+  id              uuid primary key default gen_random_uuid(),
+  branch_id       text references branches(id) on delete cascade,
+  date            date not null,
+  ingredient_code text references ingredients(code) on delete cascade,
+  qty             numeric not null,
+  by_user         text,
+  created_at      timestamptz default now()
+);
+alter table stock_receiving enable row level security;
+create policy "auth read stock_receiving"   on stock_receiving for select using (auth.role() = 'authenticated');
+create policy "auth insert stock_receiving" on stock_receiving for insert with check (auth.role() = 'authenticated');
+create policy "auth delete stock_receiving" on stock_receiving for delete using (auth.role() = 'authenticated');

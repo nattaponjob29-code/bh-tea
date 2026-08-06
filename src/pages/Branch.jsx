@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { AppShell, PageHeader, Icon, StatCard, Empty, Modal, useToast, useIsMobile } from '../components/ui.jsx';
 import { HistoryView, DefectHistoryPage } from '../components/History.jsx';
-import { StockCountPage, StockReportPage } from './Stock.jsx';
+import { StockCountPage, StockReportPage, StockMovementPage } from './Stock.jsx';
 import { todayISO, nowHM, fmtDateTH, fmtNum, greetingTH } from '../lib/helpers.js';
 import { DEFECT_REASONS, FAIL_REASONS } from '../lib/constants.js';
 import { insertRecord, insertRecords, statsKpi, fetchRecords } from '../lib/db.js';
@@ -20,6 +20,7 @@ export function BranchView({ user, store, refresh, onLogout }) {
     ...(isTest ? [
       { key: 'stock',       label: 'ตรวจนับสต็อก',     icon: 'box' },
       { key: 'stockReport', label: 'รายงานตรวจนับ',    icon: 'dashboard' },
+      { key: 'stockMove',   label: 'เคลื่อนไหวสินค้า',  icon: 'log' },
     ] : []),
     { key: 'history',       label: 'ประวัติการผลิต',    icon: 'history' },
     { key: 'defectHistory', label: 'ประวัติเสียหาย',    icon: 'trash' },
@@ -32,6 +33,7 @@ export function BranchView({ user, store, refresh, onLogout }) {
       {page === 'defect'        && <BranchDefect user={user} store={store} refresh={refresh} />}
       {page === 'stock'         && <StockCountPage user={user} store={store} />}
       {page === 'stockReport'   && <StockReportPage scopeBranchIds={[branchId]} store={store} showBranch={false} />}
+      {page === 'stockMove'     && <StockMovementPage user={user} store={store} />}
       {page === 'history'       && <BranchHistory branchId={branchId} store={store} refresh={refresh} />}
       {page === 'defectHistory' && <DefectHistoryPage scopeBranchIds={[branchId]} store={store} title="ประวัติเสียหายของสาขา" eyebrow="Defect History" showBranch={false} refresh={refresh} />}
     </AppShell>

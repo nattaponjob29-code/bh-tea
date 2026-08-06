@@ -270,6 +270,44 @@ export async function fetchStockHistory({ from, to, branchIds } = {}) {
   }));
 }
 
+// ยอดนับรายวัน (status final) ในช่วงวันที่ — ใช้ปั้นตาราง "เคลื่อนไหวสินค้า"
+export async function fetchStockCountsRange({ branchId, from, to }) {
+  const { data, error } = await supabase.from('stock_counts')
+    .select('ingredient_code, date, counted_qty, prev_qty')
+    .eq('branch_id', branchId).eq('status', 'final')
+    .gte('date', from).lte('date', to)
+    .order('date', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data || []).map(r => ({
+    code: r.ingredient_code, date: r.date, counted: +r.counted_qty || 0,
+    prev: r.prev_qty == null ? null : +r.prev_qty,
+  }));
+}
+
+// ─── Stock receiving (เติมสินค้ารับเข้า) ───────────────────────────────────────
+// หมายเหตุ: เช่นเดียวกับ stock_counts — ไม่เช็ก TEST_MODE เพื่อให้ role Test ทดสอบได้จริง
+
+export async function fetchStockReceivingRange({ branchId, from, to }) {
+  let q = supabase.from('stock_receiving').select('id, date, ingredient_code, qty').eq('branch_id', branchId);
+  if (from) q = q.gte('date', from);
+  if (to)   q = q.lte('date', to);
+  q = q.order('date', { ascending: false }).order('created_at', { ascending: false }).limit(500);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  return (data || []).map(r => ({ id: r.id, date: r.date, code: r.ingredient_code, qty: +r.qty || 0 }));
+}
+
+export async function insertStockReceiving({ branchId, date, code, qty, by }) {
+  const { error } = await supabase.from('stock_receiving')
+    .insert({ branch_id: branchId, date, ingredient_code: code, qty, by_user: by || null });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteStockReceiving(id) {
+  const { error } = await supabase.from('stock_receiving').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
 // ─── Branches ─────────────────────────────────────────────────────────────────
 
 export async function saveBranch(branch) {
