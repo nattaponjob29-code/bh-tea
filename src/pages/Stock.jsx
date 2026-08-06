@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { PageHeader, Icon, Empty, useToast, SearchBox } from '../components/ui.jsx';
 import { DateQuickPresets } from '../components/History.jsx';
 import { COUNT_TAGS } from '../lib/constants.js';
-import { todayISO, fmtNum, fmtDateTH } from '../lib/helpers.js';
+import { todayISO, fmtNum, fmtDateTH, csvCell } from '../lib/helpers.js';
 import {
   fetchLastCounts, fetchCountsForDate, saveStockCounts, fetchStockHistory,
   fetchStockCountsRange, fetchStockReceivingRange, insertStockReceiving, deleteStockReceiving,
@@ -20,6 +20,14 @@ function cycleForDate(iso) {
   if (next.getMonth() !== d.getMonth()) return 'monthly'; // วันสุดท้ายของเดือน
   if (d.getDay() === 2) return 'weekly';                   // อังคาร
   return 'daily';
+}
+
+// เรียงชื่อ: อังกฤษ (A-Z) ขึ้นก่อน แล้วตามด้วยไทย (ก-ฮ)
+function compareNameENFirst(a, b) {
+  const isEN = (s) => /^[A-Za-z]/.test(s);
+  const aEN = isEN(a), bEN = isEN(b);
+  if (aEN !== bEN) return aEN ? -1 : 1;
+  return a.localeCompare(b, aEN ? 'en' : 'th');
 }
 
 function Variance({ v, unit }) {
@@ -359,7 +367,7 @@ export function StockReportPage({ scopeBranchIds, store, showBranch = false }) {
       }
       return true;
     });
-    if (sort === 'name') list = [...list].sort((a, b) => (ing[a.code]?.name || a.code).localeCompare(ing[b.code]?.name || b.code, 'th'));
+    if (sort === 'name') list = [...list].sort((a, b) => compareNameENFirst(ing[a.code]?.name || a.code, ing[b.code]?.name || b.code));
     else if (sort === 'qty') list = [...list].sort((a, b) => b.counted - a.counted);
     else list = [...list].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     return list;
@@ -368,9 +376,32 @@ export function StockReportPage({ scopeBranchIds, store, showBranch = false }) {
   const net = view.reduce((s, r) => s + (r.prev == null ? 0 : r.counted - r.prev), 0);
   const branchName = (id) => store.branches.find(b => b.id === id)?.name || id;
 
+  const onExport = () => {
+    const head = ['วันที่', 'รอบ', ...(showBranch ? ['สาขา'] : []), 'รหัสวัตถุดิบ', 'ชื่อวัตถุดิบ', 'Tag', 'หน่วย', 'ครั้งก่อน', 'นับจริง', 'ส่วนต่าง', 'ผู้นับ'];
+    const csvRows = [head];
+    view.forEach(r => {
+      const it = ing[r.code];
+      const d = r.prev == null ? '' : r.counted - r.prev;
+      csvRows.push([
+        r.date, r.cycle ? CYCLE_LABEL[r.cycle] : '',
+        ...(showBranch ? [branchName(r.branchId)] : []),
+        r.code, it?.name || '', it?.count_tag ? COUNT_TAGS[it.count_tag] : '', it?.unit || '',
+        r.prev == null ? '' : r.prev, r.counted, d, r.counter || '',
+      ]);
+    });
+    const csv = '﻿' + csvRows.map(row => row.map(csvCell).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `stock-report-${todayISO()}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`Export ${view.length} แถว`, 'ok');
+  };
+
   return (
     <>
-      <PageHeader eyebrow="Report" title="รายงานการตรวจนับ" subtitle="ย้อนดูประวัติ · ค้นหาวัตถุดิบ · กรอง Tag / วันที่ / จัดเรียง" />
+      <PageHeader eyebrow="Report" title="รายงานการตรวจนับ" subtitle="ย้อนดูประวัติ · ค้นหาวัตถุดิบ · กรอง Tag / วันที่ / จัดเรียง"
+        right={<button className="btn ghost" onClick={onExport} disabled={view.length === 0}><Icon name="arrow-down" size={14} /> Export CSV</button>} />
 
       <div className="card stock-filters" style={{ padding: '14px 16px', marginBottom: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
