@@ -88,8 +88,10 @@ function computeMoveMetrics(countsByDate, weekDays, recvInWeek, recvFuture, info
   const projR1 = close - avg * info.daysToR1 + inW1;
   const s1 = Math.min(max, Math.max(0, Math.ceil(max - projR1)));
   const stockout1 = projR1 < 0;
+  // สต็อกจริงหลังรอบ1 = ที่ฉายไว้ + ของที่เบิกจริง (s1) — ถ้ารอบ1 ไม่เบิก (ของเกิน Max อยู่แล้ว) ต้องยกยอดจริงไปต่อ ไม่ใช่ตั้งกลับที่ Max
+  const actualAtR1 = projR1 + s1;
   const inW2 = recvFuture.filter(r => r.date > info.r1 && r.date <= info.r2).reduce((s, r) => s + r.qty, 0);
-  const projR2 = max - avg * info.coverR1 + inW2;
+  const projR2 = actualAtR1 - avg * info.coverR1 + inW2;
   const s2 = Math.min(max, Math.max(0, Math.ceil(max - projR2)));
   return { usage, avg, max, min, s1, s2, stockout1, inW1List };
 }
