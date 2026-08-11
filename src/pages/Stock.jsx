@@ -529,6 +529,33 @@ function MovementTab({ user, store, refreshKey }) {
     });
   }, [store.ingredients, countRows, recvRows, weekDays, weekStart, weekEnd, info]);
 
+  const onExport = () => {
+    const head = [
+      'รหัสสินค้า', 'ชื่อสินค้า', 'Tag', 'หน่วย', 'Max', 'Min',
+      ...weekDays.map(d => shortTH(d)),
+      'Usage', 'Avg./Day', `In-transit (ถึง ${shortTH(info.r1)})`,
+      `Suggest รอบ1 (${shortTH(info.r1)})`, `Suggest รอบ2 (${shortTH(info.r2)})`,
+    ];
+    const csvRows = [head];
+    rows.forEach(({ ing, cd, m }) => {
+      const inTransit = m ? m.inW1List.map(r => `${shortTH(r.date)}:+${r.qty}`).join('; ') : '';
+      csvRows.push([
+        ing.code, ing.name, ing.count_tag ? COUNT_TAGS[ing.count_tag] : '', ing.unit,
+        m ? m.max : '', m ? m.min : '',
+        ...weekDays.map(d => (cd[d] ? cd[d].counted : '')),
+        m ? m.usage : '', m ? m.avg.toFixed(2) : '', inTransit,
+        m ? m.s1 : '', m ? m.s2 : '',
+      ]);
+    });
+    const csv = '﻿' + csvRows.map(row => row.map(csvCell).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `stock-movement-${sched}-${weekStart}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    toast(`Export ${rows.length} รายการ`, 'ok');
+  };
+
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
@@ -537,10 +564,15 @@ function MovementTab({ user, store, refreshKey }) {
           <option value="tue-fri">🚚 รอบรถ อังคาร – ศุกร์</option>
           <option value="wed-sat">🚚 รอบรถ พุธ – เสาร์</option>
         </select>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--paper)', border: '1px solid var(--line-2)', borderRadius: 999, padding: '5px 6px' }}>
-          <button className="btn ghost sm" onClick={() => setWeekStart(w => addDays(w, -7))} style={{ padding: '6px 10px' }}>‹</button>
-          <span className="num" style={{ fontWeight: 600, fontSize: 13.5, whiteSpace: 'nowrap' }}>{shortTH(weekStart)} – {shortTH(weekEnd)}</span>
-          <button className="btn ghost sm" onClick={() => setWeekStart(w => addDays(w, 7))} style={{ padding: '6px 10px' }}>›</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--paper)', border: '1px solid var(--line-2)', borderRadius: 999, padding: '5px 6px' }}>
+            <button className="btn ghost sm" onClick={() => setWeekStart(w => addDays(w, -7))} style={{ padding: '6px 10px' }}>‹</button>
+            <span className="num" style={{ fontWeight: 600, fontSize: 13.5, whiteSpace: 'nowrap' }}>{shortTH(weekStart)} – {shortTH(weekEnd)}</span>
+            <button className="btn ghost sm" onClick={() => setWeekStart(w => addDays(w, 7))} style={{ padding: '6px 10px' }}>›</button>
+          </div>
+          <button className="btn ghost" onClick={onExport} disabled={rows.length === 0}>
+            <Icon name="arrow-down" size={14} /> Export CSV
+          </button>
         </div>
       </div>
 
