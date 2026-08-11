@@ -565,10 +565,10 @@ function MovementTab({ user, store, refreshKey }) {
                       </th>
                     );
                   })}
-                  <th style={{ textAlign: 'right' }}>Usage</th>
+                  <th style={{ textAlign: 'right', background: 'color-mix(in oklab, var(--bad) 16%, var(--paper))', color: 'var(--bad)' }}>Usage</th>
                   <th style={{ textAlign: 'right' }}>Avg./Day</th>
                   <th style={{ textAlign: 'right' }}>In-transit</th>
-                  <th style={{ textAlign: 'right' }}>Suggest เบิก</th>
+                  <th style={{ textAlign: 'right', background: 'color-mix(in oklab, var(--amber) 26%, var(--paper))', color: 'var(--tea)' }}>Suggest เบิก</th>
                 </tr>
               </thead>
               <tbody>
@@ -590,7 +590,7 @@ function MovementTab({ user, store, refreshKey }) {
                         </td>
                       );
                     })}
-                    <td className="num" style={{ textAlign: 'right', fontWeight: 700 }}>
+                    <td className="num" style={{ textAlign: 'right', fontWeight: 700, background: 'color-mix(in oklab, var(--bad) 8%, transparent)' }}>
                       {m ? <>{fmtNum(m.usage)} <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--ink-3)' }}>{ing.unit}</span></> : <span style={{ color: 'var(--ink-3)', fontWeight: 400 }}>—</span>}
                     </td>
                     <td className="num" style={{ textAlign: 'right' }}>{m ? m.avg.toFixed(2) : <span style={{ color: 'var(--ink-3)' }}>—</span>}</td>
@@ -602,7 +602,7 @@ function MovementTab({ user, store, refreshKey }) {
                         </div>
                       )) : <span style={{ color: 'var(--ink-3)' }}>—</span>}
                     </td>
-                    <td style={{ textAlign: 'right' }}>
+                    <td style={{ textAlign: 'right', background: 'color-mix(in oklab, var(--amber) 12%, transparent)' }}>
                       {m ? (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'baseline' }}>
