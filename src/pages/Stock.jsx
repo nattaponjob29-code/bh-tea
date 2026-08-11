@@ -45,6 +45,10 @@ const SCHEDS = {
   'wed-sat': { label: 'พุธ – เสาร์', dows: [3, 6] },
 };
 const MOVE_LEAD = 3; // เผื่อ lead time เบิกของ (วัน) — รอบเบิกต้องห่างจากวันนับ ≥ ค่านี้
+// รอบรถทั้ง 3 แบบที่มีในระบบ ห่างกัน 3 วันเสมอ → รอบส่งสลับ 3 วัน/4 วัน คงที่ไม่ว่าจะเลือกรอบไหน
+const MAX_CYCLE_DAYS = 4;   // รอบยาวสุดที่สาขาต้องรอของ — ใช้กำหนด Max Items
+const MIN_CYCLE_DAYS = 3;   // รอบสั้นสุดที่สาขาต้องรอของ — ใช้กำหนด Min Items
+const MAX_SAFETY = 1.15;    // ส่วนเผื่อ Safety Stock บน Max
 
 // ใช้ UTC ล้วนตลอดสาย (parse/แก้/format แบบ UTC) กันวันเพี้ยนในโซนเวลาบวก UTC เช่นไทย (+7)
 // ถ้าผสม parse-local กับ toISOString() (UTC) จะเสียวันไปทุกครั้งที่เรียก จนลูป while หา r2 ไม่จบ (ค้างทั้งหน้า)
@@ -81,8 +85,8 @@ function computeMoveMetrics(countsByDate, weekDays, recvInWeek, recvFuture, info
   const close = last.counted;
   const usage = open + recvInWeek - close;           // ใช้ไปสุทธิ (บวกของรับเข้ากลับ)
   const avg = usage / 7;
-  const max = Math.ceil(avg * 7 * 1.15);              // Max = avg×7×1.15
-  const min = Math.ceil(avg * 4);                     // Min = avg×4
+  const max = Math.ceil(avg * MAX_CYCLE_DAYS * MAX_SAFETY); // Max = avg×4×1.15 (4 = รอบยาวสุดของรอบรถ)
+  const min = Math.ceil(avg * MIN_CYCLE_DAYS);               // Min = avg×3 (3 = รอบสั้นสุดของรอบรถ)
   const inW1List = recvFuture.filter(r => r.date <= info.r1);
   const inW1 = inW1List.reduce((s, r) => s + r.qty, 0);
   const projR1 = close - avg * info.daysToR1 + inW1;
