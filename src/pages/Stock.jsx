@@ -59,20 +59,27 @@ const shortTH = (iso) => { const d = new Date(iso + 'T00:00:00Z'); return d.getU
 // วันพุธล่าสุดที่ ≤ iso (จุดเริ่มสัปดาห์แสดงผล: พุธ→อังคาร)
 const wedStartFor = (iso) => addDays(iso, -((dowOf(iso) - 3 + 7) % 7));
 
-// รอบเบิก 2 รอบถัดไป (นับจากวันสิ้นสัปดาห์ = วันอังคารที่นับ Weekly) ตามรอบรถที่เลือก
-function schedInfo(key, weekEndISO) {
-  const dows = SCHEDS[key].dows;
-  const gapOf = (dow) => { const g = (dow - dowOf(weekEndISO) + 7) % 7; return g === 0 ? 7 : g; };
-  const cand = dows.map(dow => ({ dow, gap: gapOf(dow) })).filter(c => c.gap >= MOVE_LEAD).sort((a, b) => a.gap - b.gap);
-  const c1 = cand[0];
-  const r1 = addDays(weekEndISO, c1.gap);
-  const otherDow = dows.find(d => d !== c1.dow);
-  let r2 = addDays(r1, 1);
-  for (let guard = 0; dowOf(r2) !== otherDow; guard++) {
-    if (guard >= 8) throw new Error('schedInfo: หาวันรอบ2 ไม่เจอภายใน 8 วัน — ตรวจสอบการคำนวณวันที่'); // กันลูปค้าง
-    r2 = addDays(r2, 1);
+// วันถัดไป (หลัง afterISO) ที่ตรงกับ dow ที่กำหนด
+function nextOccurrence(dow, afterISO) {
+  let d = addDays(afterISO, 1);
+  for (let guard = 0; dowOf(d) !== dow; guard++) {
+    if (guard >= 8) throw new Error('nextOccurrence: หาวันไม่เจอภายใน 8 วัน — ตรวจสอบการคำนวณวันที่'); // กันลูปค้าง
+    d = addDays(d, 1);
   }
-  return { r1, r2, daysToR1: c1.gap, coverR1: daysBetween(r1, r2), dows };
+  return d;
+}
+
+// รอบเบิก 2 รอบถัดไป (นับจากวันสิ้นสัปดาห์ = วันอังคารที่นับ Weekly) ตามรอบรถที่เลือก
+// รอบ1 อิงกับ "วันแรก" ของรอบรถเสมอ (เช่น จันทร์-พฤหัส → รอบ1 = จันทร์) ไม่สลับไปหาวันที่สองแม้จะใกล้กว่า
+function schedInfo(key, weekEndISO) {
+  const [primary, secondary] = SCHEDS[key].dows;
+  let r1 = nextOccurrence(primary, weekEndISO);
+  for (let guard = 0; daysBetween(weekEndISO, r1) < MOVE_LEAD; guard++) {
+    if (guard >= 4) throw new Error('schedInfo: หา r1 ที่พ้นเวลาเผื่อ (lead) ไม่เจอ — ตรวจสอบการคำนวณวันที่');
+    r1 = addDays(r1, 7);
+  }
+  const r2 = nextOccurrence(secondary, r1);
+  return { r1, r2, daysToR1: daysBetween(weekEndISO, r1), coverR1: daysBetween(r1, r2), dows: SCHEDS[key].dows };
 }
 
 // เมตริกของวัตถุดิบ 1 ตัวในสัปดาห์ที่แสดง: Usage / Avg / Max / Min / Suggest (2 รอบ)
