@@ -154,6 +154,13 @@ function AdminBranches({ store, refresh }) {
     try { await deleteBranch(id); await refresh(); toast('ลบเรียบร้อย', 'ok'); }
     catch (e) { toast(e.message, 'bad'); }
   };
+  const onTogglePilot = async (b) => {
+    try {
+      await saveBranch({ id: b.id, stock_pilot: !b.stock_pilot });
+      await refresh();
+      toast(!b.stock_pilot ? `เปิดทดลอง Stock: ${b.name}` : `ปิดทดลอง Stock: ${b.name}`, 'ok');
+    } catch (e) { toast(e.message, 'bad'); }
+  };
 
   const onDeleteSelected = async () => {
     setSaving(true);
@@ -229,6 +236,7 @@ function AdminBranches({ store, refresh }) {
                   onChange={toggleAll} style={{ cursor: 'pointer', width: 15, height: 15 }} />
               </th>
               <th>รหัส</th><th>ชื่อสาขา</th><th>เขต / พื้นที่</th>
+              <th style={{ textAlign: 'center' }}>สาขาทดลอง Stock</th>
               <th style={{ textAlign: 'right' }}>กิจกรรม</th>
               <th style={{ width: 100 }}></th>
             </tr>
@@ -246,6 +254,16 @@ function AdminBranches({ store, refresh }) {
                   <td className="font-mono" style={{ fontSize: 13, color: 'var(--ink)' }}>{b.id}</td>
                   <td style={{ fontWeight: 500 }}>{b.name}</td>
                   <td><span className="badge">{b.area}</span></td>
+                  <td style={{ textAlign: 'center' }}>
+                    <button
+                      className={`badge ${b.stock_pilot ? 'ok' : ''}`}
+                      onClick={() => onTogglePilot(b)}
+                      style={{ cursor: 'pointer', border: 'none', fontFamily: 'inherit' }}
+                      title={b.stock_pilot ? 'กำลังทดลองอยู่ — กดเพื่อปิด' : 'กดเพื่อเปิดทดลองที่สาขานี้'}
+                    >
+                      <span className="dot" />{b.stock_pilot ? 'เปิดอยู่' : 'ปิดอยู่'}
+                    </button>
+                  </td>
                   <td className="num" style={{ textAlign: 'right' }}>{cnt.toLocaleString()} records</td>
                   <td style={{ textAlign: 'right' }}>
                     <button className="btn ghost sm" onClick={() => onEdit(b)} style={{ marginRight: 6 }}><Icon name="edit" size={12} /></button>

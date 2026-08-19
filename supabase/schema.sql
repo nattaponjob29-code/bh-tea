@@ -15,6 +15,7 @@ create table if not exists branches (
   id        text primary key,      -- e.g. BR01
   name      text not null,
   area      text not null,         -- e.g. BKK-Central
+  stock_pilot boolean not null default false, -- เปิดฟีเจอร์ตรวจนับสต็อก+เคลื่อนไหวสินค้าให้สาขานี้
   created_at timestamptz default now()
 );
 

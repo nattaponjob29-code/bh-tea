@@ -11,13 +11,15 @@ export function BranchView({ user, store, refresh, onLogout }) {
   const [page, setPage] = useState('home');
   const branch = store.branches.find(b => b.id === user.branchId);
   const branchId = user.branchId;
-  const isTest = user.role === 'Test'; // ฟีเจอร์ตรวจนับสต็อกเปิดเฉพาะ Test ก่อน (ทดสอบ)
+  // ฟีเจอร์ตรวจนับสต็อก/เคลื่อนไหวสินค้า: เปิดให้ role Test เสมอ (ทดสอบ)
+  // หรือสาขาที่ Admin เปิด "สาขาทดลอง" ไว้ (branches.stock_pilot) — จัดการได้จากหน้า Admin → จัดการสาขา
+  const stockEnabled = user.role === 'Test' || !!branch?.stock_pilot;
 
   const nav = [
     { key: 'home',          label: 'หน้าหลัก',        icon: 'dashboard' },
     { key: 'produce',       label: 'บันทึกล็อตผลิต',    icon: 'factory' },
     { key: 'defect',        label: 'บันทึกของเสียหาย',  icon: 'alert' },
-    ...(isTest ? [
+    ...(stockEnabled ? [
       { key: 'stock',       label: 'ตรวจนับสต็อก',     icon: 'box' },
       { key: 'stockReport', label: 'รายงานตรวจนับ',    icon: 'dashboard' },
       { key: 'stockMove',   label: 'เคลื่อนไหวสินค้า',  icon: 'log' },
