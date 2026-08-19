@@ -156,7 +156,9 @@ function AdminBranches({ store, refresh }) {
   };
   const onTogglePilot = async (b) => {
     try {
-      await saveBranch({ id: b.id, stock_pilot: !b.stock_pilot });
+      // upsert ต้องส่ง name/area มาด้วยเสมอ — Postgres เช็ก NOT NULL ตอนสร้างแถวผู้สมัคร insert
+      // แม้จะจบที่ path update ก็ตาม (id ชนกันแล้วค่อยเลือก update)
+      await saveBranch({ id: b.id, name: b.name, area: b.area, stock_pilot: !b.stock_pilot });
       await refresh();
       toast(!b.stock_pilot ? `เปิดทดลอง Stock: ${b.name}` : `ปิดทดลอง Stock: ${b.name}`, 'ok');
     } catch (e) { toast(e.message, 'bad'); }
